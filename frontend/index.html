@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#6965db" />
+    <title>Excalidraw – schémas</title>
+    <script>
+      // Polices Excalidraw servies localement (copiées dans public/fonts au build)
+      // au lieu du CDN esm.sh : fonctionnement hors ligne.
+      window.EXCALIDRAW_ASSET_PATH = "/";
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
