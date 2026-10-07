@@ -17,8 +17,9 @@ import type { OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/ty
 import { api, ApiError, basename, stripExt, type Settings } from "./api";
 import { CustomizeDialog, DEFAULT_TITLE } from "./CustomizeDialog";
 import { Explorer } from "./Explorer";
-import { MoonIcon, SettingsIcon, SunIcon } from "./icons";
+import { CloseIcon, MenuIcon, MoonIcon, SaveIcon, SettingsIcon, SunIcon } from "./icons";
 import { Splitter } from "./Splitter";
+import { UpdateBadge } from "./UpdateBadge";
 import { storeThumb } from "./thumbs";
 
 type Theme = "light" | "dark";
@@ -338,11 +339,13 @@ export default function App() {
     >
       <header className="topbar">
         <button
-          className="icon-btn"
+          className={`ex-btn square ${drawerOpen ? "active" : ""}`}
           aria-label="Afficher/masquer l'explorateur"
+          aria-pressed={drawerOpen}
+          title="Explorateur"
           onClick={() => setDrawerOpen((o) => !o)}
         >
-          ☰
+          <MenuIcon />
         </button>
         <button className="brand" title="Personnaliser le titre et le logo" onClick={() => setCustomizing(true)}>
           {settings.logo && <img className="logo" src={api.logoUrl(settings.logo)} alt="" />}
@@ -361,15 +364,27 @@ export default function App() {
         {scene && (
           <>
             <span className={`status ${saveState}`}>{SAVE_LABEL[saveState]}</span>
-            <button onClick={() => save()} disabled={saveState === "saved" || saveState === "saving"}>
-              Enregistrer
+            <button
+              className="ex-btn"
+              onClick={() => save()}
+              disabled={saveState === "saved" || saveState === "saving"}
+              title="Enregistrer (enregistrement automatique)"
+            >
+              <SaveIcon />
+              <span className="save-label">Enregistrer</span>
             </button>
-            <button className="icon-btn" aria-label="Fermer le schéma" onClick={() => save().then(closeFile)}>
-              ✕
+            <button
+              className="icon-btn"
+              aria-label="Fermer le schéma"
+              title="Fermer le schéma"
+              onClick={() => save().then(closeFile)}
+            >
+              <CloseIcon />
             </button>
           </>
         )}
         <div className="topbar-tools">
+          <UpdateBadge />
           <button
             className="icon-btn"
             aria-label={theme === "dark" ? "Passer en mode clair" : "Passer en mode sombre"}

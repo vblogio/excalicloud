@@ -20,6 +20,13 @@ export interface Settings {
   logo: string;
 }
 
+/** Dernière version d'Excalidraw publiée sur npm (vide si inconnue ou désactivé). */
+export interface UpdateStatus {
+  enabled: boolean;
+  latest?: string;
+  checkedAt?: string;
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -48,6 +55,8 @@ const json = (body: unknown): RequestInit => ({
 });
 
 export const api = {
+  update: async (): Promise<UpdateStatus> => (await request("/api/update")).json(),
+
   list: async (dir: string): Promise<Entry[]> =>
     (await request(`/api/list?path=${q(dir)}`)).json(),
 

@@ -65,7 +65,7 @@ export function CustomizeDialog({ settings, onChange, onClose }: Props) {
         <label className="field">
           <span>Titre affiché</span>
           <input
-            className="search"
+            className="text-input"
             value={title}
             maxLength={MAX_TITLE}
             placeholder={DEFAULT_TITLE}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, basename, dirname, join, type Entry } from "./api";
+import { FolderIcon, FolderPlusIcon } from "./icons";
 
 interface Props {
   /** Éléments à déplacer. */
@@ -72,14 +73,20 @@ export function MoveDialog({ paths, startDir, onCancel, onConfirm }: Props) {
           {folders.map((f) => (
             <li key={f.path}>
               <button disabled={blocked(f.path)} onClick={() => setDir(f.path)}>
-                <span aria-hidden>📁</span> {f.name}
+                <span className="folder">
+                  <FolderIcon />
+                </span>
+                {f.name}
               </button>
             </li>
           ))}
           {folders.length === 0 && <li className="muted empty">Aucun sous-dossier</li>}
         </ul>
         <div className="modal-actions">
-          <button onClick={newFolder}>＋ Dossier</button>
+          <button onClick={newFolder}>
+            <FolderPlusIcon />
+            <span>Dossier</span>
+          </button>
           <span className="spacer" />
           <button onClick={onCancel}>Annuler</button>
           <button
