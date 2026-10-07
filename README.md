@@ -1,6 +1,6 @@
 # excalidraw-go
 
-Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arborescence de dossiers, création, renommage, déplacement (glisser-déposer ou menu), duplication, suppression (corbeille), recherche, import/export de fichiers `.excalidraw`, sauvegarde automatique côté serveur. Interface web unique, responsive (l'explorateur devient un tiroir sur mobile).
+Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arborescence de dossiers, **vignettes des schémas**, création, renommage, **sélection et déplacement multiples** (glisser-déposer ou dialogue « Déplacer vers… »), duplication, suppression (corbeille), recherche, import/export de fichiers `.excalidraw`, sauvegarde automatique côté serveur. Interface web unique, responsive (l'explorateur devient un tiroir sur mobile).
 
 - **Backend** : Go 1.24, bibliothèque standard uniquement (aucune dépendance externe), API REST/JSON, stockage en fichiers `.excalidraw` sur un volume.
 - **Frontend** : React 19 + composant officiel [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw) 0.18.1 (licence MIT), build Vite **embarqué dans le binaire Go** (`embed`).
@@ -18,6 +18,7 @@ Navigateur ──HTTP──▶ conteneur excalidraw-go (:8080, uid 65532, rootfs
                        volume /data
                          ├─ projets/réseau/sdn.excalidraw   ← fichiers JSON Excalidraw standards
                          ├─ .library.excalidrawlib          ← bibliothèque partagée
+                         ├─ .thumbs/projets/réseau/sdn.excalidraw.png ← miniatures (régénérables)
                          └─ .trash/<horodatage>/...         ← éléments supprimés
 ```
 
@@ -43,12 +44,23 @@ Bind mount au lieu du volume nommé : `- ./data:/data` puis `chown -R 65532:6553
 ## Utilisation
 
 - **＋ Schéma / ＋ Dossier** : création dans le dossier courant.
-- **⋯** sur une ligne : renommer, déplacer, dupliquer, télécharger, supprimer.
-- **Glisser-déposer** (souris) d'un élément sur un dossier, sur `..` ou sur le fil d'Ariane pour le déplacer. Sur écran tactile : menu ⋯ → *Déplacer…*
+- **Vignettes / liste** : bouton ▦ / ☰ à droite de la recherche (choix mémorisé par navigateur).
+- **⋯** sur un élément : renommer, déplacer, dupliquer, télécharger, supprimer.
+- **Sélection multiple** : case à cocher (au survol, toujours visible sur écran tactile), `Ctrl/Cmd+clic`, `Maj+clic` pour une plage, `Ctrl+A` pour tout. Tant qu'une sélection est en cours, un simple clic/tap ajoute ou retire un élément. La barre de sélection propose *Déplacer…* et la mise à la corbeille ; `Échap` annule, `Suppr` supprime.
+- **Déplacer** : glisser-déposer (souris) d'un élément — ou de toute la sélection — sur un dossier, sur `..` ou sur le fil d'Ariane ; ou *Déplacer…* qui ouvre un sélecteur de dossier (navigation, création de dossier), utilisable au doigt. En cas de conflit de nom dans la destination, les autres éléments sont tout de même déplacés et les échecs listés.
 - **Importer** : envoie un ou plusieurs `.excalidraw` locaux dans le dossier courant.
 - **Sauvegarde** : automatique 1,5 s après la dernière modification, immédiate avec `Ctrl/Cmd+S`. Le statut (Modifié / Enregistrement… / Enregistré) est affiché dans la barre du haut.
 - **Lien direct** : l'URL `http://hôte:8080/#/dossier/schema.excalidraw` ouvre le schéma.
 - **Bibliothèque** Excalidraw : persistée côté serveur, partagée entre tous les schémas.
+
+### Miniatures
+
+Rendues par le navigateur avec `exportToBlob` d'Excalidraw (PNG 320 px), puis stockées dans `DATA_DIR/.thumbs/` :
+
+- à chaque sauvegarde du schéma ouvert ;
+- à la demande pour les schémas sans miniature ou modifiés hors de l'application (import, copie de fichiers sur le volume, script) : l'explorateur charge le schéma, génère la vignette (2 en parallèle, seulement pour les éléments visibles) et l'envoie au serveur, une fois pour toutes.
+
+Une miniature plus ancienne que son schéma est ignorée (`404`) puis régénérée. Elles suivent les renommages, déplacements, copies et suppressions ; `.thumbs/` peut être supprimé sans risque. En thème sombre, elles sont inversées en CSS comme le canevas Excalidraw.
 
 ### Concurrence
 
@@ -66,6 +78,9 @@ Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants co
 | PUT | `/api/file?path=x.excalidraw` | JSON ; `If-Match: <etag>` ou `If-None-Match: *` (création) | `Entry` + `ETag` ; `409` existe, `412` conflit |
 | POST | `/api/folder` | `{"path":"a/b"}` | `Entry` |
 | POST | `/api/move` | `{"from":"a.excalidraw","to":"d/b.excalidraw"}` | `Entry` (renommage / déplacement, fichier ou dossier) |
+| POST | `/api/move-many` | `{"paths":["a.excalidraw","dossier"],"dir":"d"}` | `[{"from","to"}\|{"from","error"}]` : déplacement multiple, résultat par élément |
+| GET | `/api/thumb?path=x.excalidraw&v=<modTime>` | | PNG ; `404` si absente ou périmée |
+| PUT | `/api/thumb?path=x.excalidraw` | PNG (1 Mo max) | `204` |
 | POST | `/api/copy` | `{"from":"…","to":"…"}` | `Entry` |
 | DELETE | `/api/entry?path=x[&recursive=true]` | | `204` (déplacé dans `.trash/`) |
 | GET/PUT | `/api/library` | bibliothèque `excalidrawlib` | |
@@ -101,7 +116,10 @@ internal/storage/           accès disque : sécurité des chemins, écriture at
 internal/api/               routes REST
 web/embed.go                embarque web/dist (produit par le build Vite)
 frontend/src/App.tsx        éditeur Excalidraw, sauvegarde auto, conflits, bibliothèque
-frontend/src/Explorer.tsx   gestionnaire de fichiers
+frontend/src/Explorer.tsx   gestionnaire de fichiers (vignettes/liste, sélection multiple, glisser-déposer)
+frontend/src/MoveDialog.tsx sélecteur de dossier « Déplacer vers… »
+frontend/src/Thumb.tsx      vignette chargée à l'affichage, générée si absente
+frontend/src/thumbs.ts      rendu PNG des miniatures et file de génération
 ```
 
 ## Sécurité
@@ -114,7 +132,6 @@ frontend/src/Explorer.tsx   gestionnaire de fichiers
 ## Limites et évolutions possibles
 
 - **Collaboration temps réel** : nécessiterait le serveur [excalidraw-room](https://github.com/excalidraw/excalidraw-room) (WebSocket) et la logique de réconciliation (`reconcileElements`) côté client.
-- **Miniatures** dans l'explorateur : générables côté client via `exportToSvg` et stockées à côté du fichier.
 - **Historique de versions** : commit git automatique dans `DATA_DIR` à chaque sauvegarde, ou snapshots du volume (ZFS/Btrfs).
 - **Multi-utilisateurs avec espaces privés** : identité transmise par le reverse proxy (`X-Forwarded-User`) et racine par utilisateur.
 - Les schémas avec beaucoup d'images embarquées sont volumineux (base64 dans le JSON) ; ajuster `MAX_BODY_MB`.
