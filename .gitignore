@@ -1,0 +1,6 @@
+/data/
+/server
+web/dist/*
+!web/dist/.gitkeep
+frontend/node_modules/
+frontend/public/fonts/
