@@ -1127,3 +1127,16 @@ li.active > .row {
     display: none;
   }
 }
+
+/* Extrait du contenu qui correspond à la recherche. */
+.row .label .snippet {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  color: var(--ex-on-primary-container);
+  opacity: 0.8;
+}
+.entries.grid .snippet {
+  text-align: center;
+}

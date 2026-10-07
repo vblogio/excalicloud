@@ -10,6 +10,7 @@ import {
   stripExt,
   withExt,
   type Entry,
+  type Hit,
 } from "./api";
 import {
   CloseIcon,
@@ -84,7 +85,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   const [dir, setDir] = useState(() => (current ? dirname(current) : ""));
   const [entries, setEntries] = useState<Entry[]>([]);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Entry[] | null>(null);
+  const [results, setResults] = useState<Hit[] | null>(null);
   const [view, setView] = useState<View>(initialView);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [anchor, setAnchor] = useState<string | null>(null); // origine d'une sélection Maj+clic
@@ -436,7 +437,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
     </div>
   );
 
-  const item = (e: Entry) => {
+  const item = (e: Hit) => {
     const isSel = selected.has(e.path);
     const cls = [
       "item",
@@ -472,6 +473,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
             <span className="label">
               {e.isDir ? e.name : stripExt(e.name)}
               {results && <small className="muted where"> {dirname(e.path) || "/"}</small>}
+              {e.snippet && <small className="snippet">{e.snippet}</small>}
             </span>
           </button>
           {!e.isDir && view === "list" && <span className="meta muted">{fmtDate(e.modTime)}</span>}
@@ -551,7 +553,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
           <SearchIcon />
           <input
             type="search"
-            placeholder="Rechercher…"
+            placeholder="Rechercher (noms, textes, IP…)"
             value={query}
             onChange={(ev) => setQuery(ev.target.value)}
           />

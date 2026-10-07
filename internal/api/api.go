@@ -1,7 +1,7 @@
 // Package api expose le Store en REST/JSON.
 //
 //	GET    /api/list?path=dir            contenu d'un dossier
-//	GET    /api/search?q=texte           recherche par nom
+//	GET    /api/search?q=texte           recherche (noms et texte des schémas)
 //	GET    /api/file?path=a/b.excalidraw lecture (ETag en en-tête)
 //	PUT    /api/file?path=a/b.excalidraw écriture (If-Match / If-None-Match: *)
 //	POST   /api/folder   {"path":"a/b"}           création de dossier

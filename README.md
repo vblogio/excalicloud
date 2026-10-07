@@ -1,6 +1,6 @@
 # excalidraw-go
 
-Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arborescence de dossiers, **vignettes des schémas**, création, renommage, **sélection et déplacement multiples** (glisser-déposer ou dialogue « Déplacer vers… »), duplication, suppression (corbeille), recherche, import/export de fichiers `.excalidraw`, sauvegarde automatique côté serveur, **historique des versions** avec comparaison visuelle et restauration. Interface web unique, responsive (l'explorateur devient un tiroir sur mobile).
+Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arborescence de dossiers, **vignettes des schémas**, création, renommage, **sélection et déplacement multiples** (glisser-déposer ou dialogue « Déplacer vers… »), duplication, suppression (corbeille), **recherche plein texte** (noms et contenu des schémas), import/export de fichiers `.excalidraw`, sauvegarde automatique côté serveur, **historique des versions** avec comparaison visuelle et restauration. Interface web unique, responsive (l'explorateur devient un tiroir sur mobile).
 
 - **Backend** : Go 1.24, bibliothèque standard uniquement (aucune dépendance externe), API REST/JSON, stockage en fichiers `.excalidraw` sur un volume.
 - **Frontend** : React 19 + composant officiel [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw) 0.18.1 (licence MIT), build Vite **embarqué dans le binaire Go** (`embed`).
@@ -93,6 +93,12 @@ Rendues par le navigateur avec `exportToBlob` d'Excalidraw (PNG 320 px), puis st
 
 Une miniature plus ancienne que son schéma est ignorée (`404`) puis régénérée. Elles suivent les renommages, déplacements, copies et suppressions ; `.thumbs/` peut être supprimé sans risque. En thème sombre, elles sont inversées en CSS comme le canevas Excalidraw.
 
+### Recherche
+
+Le champ de recherche de l'explorateur cherche dans les noms de fichiers et de dossiers **et dans le contenu des schémas** : textes, libellés des formes et des flèches, noms des cadres, liens. Taper `172.27.207` retrouve tous les schémas qui mentionnent ce réseau, avec l'extrait correspondant sous le nom. Tous les mots saisis doivent être présents (dans le nom ou le contenu) ; casse et accents sont ignorés (`replication` trouve « Réplication »).
+
+L'index est tenu en mémoire par le serveur : le texte de chaque schéma est extrait à la première recherche, puis relu seulement si le fichier a changé (date ou taille), y compris pour les fichiers modifiés hors de l'application. Rien n'est écrit sur le volume.
+
 ### Historique des versions
 
 Avant qu'un schéma soit écrasé, son contenu précédent est copié dans `DATA_DIR/.history/<chemin du schéma>/<date>.excalidraw` (fichier Excalidraw complet, ouvrable tel quel). L'enregistrement automatique écrit toutes les 1,5 s pendant l'édition : une version n'est donc conservée que si la précédente date d'au moins `HISTORY_INTERVAL` (10 min par défaut), ce qui donne une version par séance de travail ou par tranche de 10 minutes. Les `HISTORY_KEEP` plus récentes sont gardées, et `HISTORY_MAX_AGE` purge les plus anciennes.
@@ -118,7 +124,7 @@ Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants co
 | Méthode | Route | Corps / paramètres | Réponse |
 |---|---|---|---|
 | GET | `/api/list?path=dir` | | `[Entry]` (dossiers puis schémas) |
-| GET | `/api/search?q=texte` | | `[Entry]` (200 max) |
+| GET | `/api/search?q=texte` | | `[Entry + "snippet"]` (200 max) : noms puis contenu, tous les mots requis |
 | GET | `/api/file?path=x.excalidraw` | | JSON du schéma + `ETag` |
 | PUT | `/api/file?path=x.excalidraw` | JSON ; `If-Match: <etag>` ou `If-None-Match: *` (création) | `Entry` + `ETag` ; `409` existe, `412` conflit |
 | POST | `/api/folder` | `{"path":"a/b"}` | `Entry` |

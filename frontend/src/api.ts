@@ -8,6 +8,11 @@ export interface Entry {
   modTime: string;
 }
 
+/** Résultat de recherche ; snippet = extrait du contenu qui correspond. */
+export interface Hit extends Entry {
+  snippet?: string;
+}
+
 export interface MoveResult {
   from: string;
   to?: string;
@@ -72,7 +77,7 @@ export const api = {
   list: async (dir: string): Promise<Entry[]> =>
     (await request(`/api/list?path=${q(dir)}`)).json(),
 
-  search: async (text: string): Promise<Entry[]> =>
+  search: async (text: string): Promise<Hit[]> =>
     (await request(`/api/search?q=${q(text)}`)).json(),
 
   read: async (path: string): Promise<{ text: string; etag: string }> => {

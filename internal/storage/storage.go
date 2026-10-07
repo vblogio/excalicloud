@@ -57,6 +57,7 @@ type Store struct {
 	History HistoryPolicy
 
 	settingsMu sync.Mutex // sérialise les lectures-modifications de .settings.json
+	index      textIndex  // texte des schémas pour la recherche (search.go)
 }
 
 // New crée le répertoire racine si besoin et renvoie un Store.
@@ -180,44 +181,6 @@ func (s *Store) List(rel string) ([]Entry, error) {
 		}
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
 	})
-	return out, nil
-}
-
-// Search parcourt l'arborescence et renvoie les entrées dont le nom contient q.
-func (s *Store) Search(q string, limit int) ([]Entry, error) {
-	q = strings.ToLower(strings.TrimSpace(q))
-	if q == "" {
-		return []Entry{}, nil
-	}
-	out := []Entry{}
-	errStop := errors.New("stop")
-	err := filepath.WalkDir(s.root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || p == s.root {
-			return nil
-		}
-		if strings.HasPrefix(d.Name(), ".") {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !visible(d.Name(), d.IsDir()) || !strings.Contains(strings.ToLower(d.Name()), q) {
-			return nil
-		}
-		fi, err := d.Info()
-		if err != nil {
-			return nil
-		}
-		rel, _ := filepath.Rel(s.root, p)
-		out = append(out, toEntry(filepath.ToSlash(rel), fi))
-		if len(out) >= limit {
-			return errStop
-		}
-		return nil
-	})
-	if err != nil && !errors.Is(err, errStop) {
-		return nil, err
-	}
 	return out, nil
 }
 
