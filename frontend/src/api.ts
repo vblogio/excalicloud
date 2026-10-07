@@ -57,6 +57,23 @@ export interface Version {
   size: number;
 }
 
+/** Lien de partage en lecture seule (token : à placer dans /s/<token>). */
+export interface Share {
+  id: string;
+  token: string;
+  path: string;
+  created: string;
+  expires?: string;
+}
+
+/** Schéma partagé tel que servi sans authentification. */
+export interface PublicScene {
+  name: string;
+  title: string;
+  logo?: string;
+  scene: { elements?: unknown[]; appState?: Record<string, unknown>; files?: Record<string, unknown> };
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -150,6 +167,27 @@ export const api = {
     (await request("/api/history/restore", json({ path, id }))).json(),
 
   versionUrl: (path: string, id: string) => `/api/history/version?path=${q(path)}&id=${q(id)}`,
+
+  /** Liens d'un schéma, ou tous les liens si path est omis. */
+  shares: async (path?: string): Promise<Share[]> =>
+    (await request(`/api/shares${path ? `?path=${q(path)}` : ""}`)).json(),
+
+  /** days = 0 : lien sans expiration. */
+  createShare: async (path: string, days: number): Promise<Share> =>
+    (await request("/api/shares", json({ path, days }))).json(),
+
+  revokeShare: async (id: string): Promise<void> => {
+    await request(`/api/shares?id=${q(id)}`, { method: "DELETE" });
+  },
+
+  revokeAllShares: async (): Promise<void> => {
+    await request("/api/shares/revoke-all", { method: "POST" });
+  },
+
+  publicScene: async (token: string): Promise<PublicScene> =>
+    (await request(`/api/public/${q(token)}`)).json(),
+
+  shareUrl: (token: string) => `${location.origin}/s/${token}`,
 
   readLibrary: async (): Promise<unknown> => (await request("/api/library")).json(),
 

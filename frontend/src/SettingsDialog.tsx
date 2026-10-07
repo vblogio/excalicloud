@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { api, type Channel, type Settings, type UpdateStatus } from "./api";
-import { CopyIcon } from "./icons";
+import { api, type Channel, type Settings, type Share, type UpdateStatus } from "./api";
+import { CopyIcon, TrashIcon } from "./icons";
+import { fmtExpiry } from "./ShareDialog";
 import { INSTALLED, pendingVersion, rebuildCommand } from "./update";
 
 export const DEFAULT_TITLE = "Excalidraw";
@@ -30,12 +31,34 @@ export function SettingsDialog({ settings, update, focusExcalidraw, onChange, on
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [shares, setShares] = useState<Share[] | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const exSection = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (focusExcalidraw) exSection.current?.scrollIntoView({ block: "start" });
   }, [focusExcalidraw]);
+
+  const loadShares = () =>
+    api
+      .shares()
+      .then(setShares)
+      .catch((e) => setError(e.message));
+
+  useEffect(() => {
+    loadShares();
+  }, []);
+
+  const revoke = async (op: () => Promise<void>, question: string) => {
+    if (!confirm(question)) return;
+    setError(null);
+    try {
+      await op();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+    loadShares();
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -187,6 +210,53 @@ export function SettingsDialog({ settings, update, focusExcalidraw, onChange, on
                   : <>Pour conserver ce choix aux reconstructions suivantes, mettre <code>EXCALIDRAW_VERSION={pending}</code> dans <code>.env</code>. Tester l'image avant la mise en service : les versions 0.x peuvent changer d'API.</>}
               </small>
             </>
+          )}
+        </section>
+
+        <section className="field">
+          <h4>Liens de partage</h4>
+          {shares?.length ? (
+            <ul className="share-list all">
+              {shares.map((s) => (
+                <li key={s.id}>
+                  <div className="cmd">
+                    <code title={api.shareUrl(s.token)}>{s.path}</code>
+                    <button
+                      type="button"
+                      className="icon-btn danger"
+                      onClick={() => revoke(() => api.revokeShare(s.id), `Révoquer le lien vers « ${s.path} » ?`)}
+                      title="Révoquer"
+                      aria-label={`Révoquer le lien vers ${s.path}`}
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                  <small className="muted">
+                    Créé le {new Date(s.created).toLocaleDateString(undefined, { dateStyle: "short" })} · {fmtExpiry(s)}
+                  </small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <small className="muted">
+              Aucun lien actif. Pour partager un schéma en lecture seule : icône de partage de la barre du haut, ou menu
+              « … » de l'explorateur.
+            </small>
+          )}
+          {!!shares?.length && (
+            <button
+              type="button"
+              className="danger"
+              style={{ alignSelf: "flex-start" }}
+              onClick={() =>
+                revoke(
+                  api.revokeAllShares,
+                  "Révoquer tous les liens de partage ? La clé de signature est renouvelée : aucun lien existant ne fonctionnera plus.",
+                )
+              }
+            >
+              Tout révoquer
+            </button>
           )}
         </section>
 

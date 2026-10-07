@@ -1,6 +1,6 @@
 # excalidraw-go
 
-Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arborescence de dossiers, **vignettes des schémas**, création, renommage, **sélection et déplacement multiples** (glisser-déposer ou dialogue « Déplacer vers… »), duplication, suppression (corbeille), **recherche plein texte** (noms et contenu des schémas), **tags et favoris**, import/export de fichiers `.excalidraw`, sauvegarde automatique côté serveur, **historique des versions** avec comparaison visuelle et restauration. Interface web unique, responsive (l'explorateur devient un tiroir sur mobile).
+Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arborescence de dossiers, **vignettes des schémas**, création, renommage, **sélection et déplacement multiples** (glisser-déposer ou dialogue « Déplacer vers… »), duplication, suppression (corbeille), **recherche plein texte** (noms et contenu des schémas), **tags et favoris**, **partage en lecture seule par lien signé**, import/export de fichiers `.excalidraw`, sauvegarde automatique côté serveur, **historique des versions** avec comparaison visuelle et restauration. Interface web unique, responsive (l'explorateur devient un tiroir sur mobile).
 
 - **Backend** : Go 1.24, bibliothèque standard uniquement (aucune dépendance externe), API REST/JSON, stockage en fichiers `.excalidraw` sur un volume.
 - **Frontend** : React 19 + composant officiel [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw) 0.18.1 (licence MIT), build Vite **embarqué dans le binaire Go** (`embed`).
@@ -12,6 +12,7 @@ Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arbor
 Navigateur ──HTTP──▶ conteneur excalidraw-go (:8080, uid 65532, rootfs read-only)
                        ├─ /            SPA React + Excalidraw (embarquée dans le binaire)
                        ├─ /api/...     API fichiers (Go net/http)
+                       ├─ /s/<jeton>   schéma partagé en lecture seule (hors authentification)
                        └─ /healthz     sonde
                               │
                               ▼
@@ -21,6 +22,7 @@ Navigateur ──HTTP──▶ conteneur excalidraw-go (:8080, uid 65532, rootfs
                          ├─ .settings.json, .logo.png       ← titre et logo de la barre
                          ├─ .thumbs/projets/réseau/sdn.excalidraw.png ← miniatures (régénérables)
                          ├─ .meta.json                       ← tags et favoris
+                         ├─ .shares.json, .share-secret      ← liens de partage et clé de signature
                          ├─ .history/projets/réseau/sdn.excalidraw/<date>.excalidraw ← versions
                          └─ .trash/<horodatage>/...         ← éléments supprimés
 ```
@@ -47,6 +49,7 @@ docker compose up -d --build
 | `HISTORY_KEEP`  | `50`     | Versions conservées par schéma (`0` : historique désactivé) |
 | `HISTORY_INTERVAL` | `10m` | Écart minimal entre deux versions automatiques (`0` : une version à chaque enregistrement) |
 | `HISTORY_MAX_AGE` | `0`    | Âge au-delà duquel une version est purgée (ex. `2160h` = 90 jours ; `0` : jamais) |
+| `SHARE_SECRET`  | vide     | Clé de signature des liens de partage (16 caractères min.) ; vide : clé aléatoire générée dans `DATA_DIR/.share-secret` |
 | `EXCALIDRAW_VERSION` (build) | vide | Version d'Excalidraw imposée à la construction de l'image ; vide = celle de `package-lock.json` |
 
 Bind mount au lieu du volume nommé : `- ./data:/data` puis `chown -R 65532:65532 ./data`.
@@ -106,6 +109,15 @@ Menu « … » d'un élément (ou barre de sélection pour plusieurs) : **Favori
 
 Stockage : `DATA_DIR/.meta.json` (`{"items":{"chemin":{"tags":[…],"favorite":true}}}`), mis à jour aux renommages, déplacements, copies (tags seuls) et suppressions.
 
+### Partage en lecture seule
+
+Icône de partage de la barre du haut (schéma ouvert) ou menu « … » → **Partager…** : crée un lien `https://<hôte>/s/<jeton>` valable 1, 7 ou 30 jours, ou sans expiration, copié dans le presse-papiers. Le destinataire voit le schéma dans Excalidraw en mode lecture (zoom, déplacement, export PNG/SVG, téléchargement du `.excalidraw`), **sans authentification**, dans sa dernière version enregistrée ; il n'a accès à rien d'autre (ni explorateur, ni API).
+
+- Jeton = `<id>.<signature>` : id aléatoire de 128 bits et HMAC-SHA256 tronqué (128 bits) par la clé du serveur. Un jeton n'est accepté que si la signature est valide, si le lien existe encore dans `DATA_DIR/.shares.json` et s'il n'a pas expiré.
+- **Révocation** lien par lien (dialogue *Partager* ou *Paramètres → Liens de partage*), ou globale avec **Tout révoquer**, qui renouvelle aussi la clé (sauf si elle est imposée par `SHARE_SECRET`).
+- Le lien suit le schéma s'il est renommé ou déplacé, et disparaît s'il est supprimé.
+- Avec `AUTH_USER`/`AUTH_PASSWORD`, seuls `/s/…`, `/api/public/…`, `/healthz` et les fichiers statiques du build (code de l'application, polices) échappent à l'authentification. Derrière un reverse proxy avec SSO, exclure de la même façon `/s/` et `/api/public/` de l'authentification du proxy. Réponses en `X-Robots-Tag: noindex`.
+
 ### Historique des versions
 
 Avant qu'un schéma soit écrasé, son contenu précédent est copié dans `DATA_DIR/.history/<chemin du schéma>/<date>.excalidraw` (fichier Excalidraw complet, ouvrable tel quel). L'enregistrement automatique écrit toutes les 1,5 s pendant l'édition : une version n'est donc conservée que si la précédente date d'au moins `HISTORY_INTERVAL` (10 min par défaut), ce qui donne une version par séance de travail ou par tranche de 10 minutes. Les `HISTORY_KEEP` plus récentes sont gardées, et `HISTORY_MAX_AGE` purge les plus anciennes.
@@ -148,6 +160,11 @@ Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants co
 | GET | `/api/history/version?path=x.excalidraw&id=<id>` | | JSON de la version |
 | POST | `/api/history/snapshot` | `{"path":"x.excalidraw"}` | `{"id","time","size"}` (version du contenu courant) |
 | POST | `/api/history/restore` | `{"path":"x.excalidraw","id":"<id>"}` | `Entry` + `ETag` |
+| GET | `/api/shares[?path=x.excalidraw]` | | `[{"id","token","path","created","expires"}]` (d'un schéma ou tous) |
+| POST | `/api/shares` | `{"path":"x.excalidraw","days":7}` (`0` : sans expiration) | lien créé |
+| DELETE | `/api/shares?id=<id>` | | `204` |
+| POST | `/api/shares/revoke-all` | | `204` (tous les liens, nouvelle clé) |
+| GET | `/api/public/<jeton>` | | `{"name","title","logo","scene"}`, **hors authentification** ; `404` si invalide, expiré ou révoqué |
 | GET/PUT | `/api/library` | bibliothèque `excalidrawlib` | |
 | GET | `/api/settings` | | `{"title":"...","logo":"<version>","channel":"latest"}` (`logo` vide sans logo) |
 | PUT | `/api/settings` | `{"title":"..."}` (80 caractères max, vide = titre par défaut) et/ou `{"channel":"latest"\|"next"}` | réglages |
@@ -156,6 +173,7 @@ Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants co
 | DELETE | `/api/logo` | | réglages |
 | GET | `/api/update` | | `{"enabled","tags":{"latest","next"},"latest","checkedAt"}` |
 | GET | `/healthz` | | `ok` (hors authentification) |
+| GET | `/s/<jeton>` | | vue publique en lecture seule (hors authentification) |
 
 `Entry` = `{"name","path","isDir","size","modTime","tags","favorite"}` (les deux derniers omis s'ils sont vides).
 
@@ -193,6 +211,8 @@ frontend/src/Thumb.tsx      vignette chargée à l'affichage, générée si abse
 frontend/src/thumbs.ts      rendu PNG des miniatures et file de génération
 frontend/src/HistoryDialog.tsx historique : aperçu, différences, restauration
 frontend/src/TagsDialog.tsx tags d'un ou plusieurs éléments
+frontend/src/ShareDialog.tsx liens de partage d'un schéma
+frontend/src/ShareView.tsx  vue publique /s/<jeton> (lecture seule)
 ```
 
 ## Sécurité
@@ -200,6 +220,7 @@ frontend/src/TagsDialog.tsx tags d'un ou plusieurs éléments
 - Conteneur non-root, rootfs en lecture seule, `cap_drop: ALL`, `no-new-privileges`.
 - L'authentification Basic intégrée suffit pour un usage local ; en exposition réseau, placer le service derrière un reverse proxy TLS (Traefik, Caddy, nginx) avec SSO (Authelia, oauth2-proxy, Authentik) et laisser `AUTH_*` vides.
 - Écritures atomiques (fichier temporaire + `fsync` + `rename`) : pas de schéma tronqué en cas d'arrêt brutal.
+- Liens de partage : seule surface accessible sans authentification ; jetons non énumérables (id 128 bits signé HMAC), révocables, à durée limitée au choix. Un lien donne la dernière version enregistrée du schéma, images embarquées comprises.
 - Aucune suppression physique : la purge de `.trash/` est à la charge de l'exploitant (ex. `find /data/.trash -mindepth 1 -maxdepth 1 -mtime +30 -exec rm -rf {} +`).
 
 ## Limites et évolutions possibles

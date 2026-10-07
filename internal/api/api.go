@@ -17,6 +17,11 @@
 //	GET    /api/history/version?path=x&id=v      contenu d'une version
 //	POST   /api/history/snapshot {"path"}        version du contenu courant
 //	POST   /api/history/restore {"path","id"}    restauration (ETag en en-tête)
+//	GET    /api/shares[?path=x]                  liens de partage (d'un schéma ou tous)
+//	POST   /api/shares {"path","days"}           nouveau lien (days 0 : sans expiration)
+//	DELETE /api/shares?id=x                      révocation d'un lien
+//	POST   /api/shares/revoke-all                révocation de tous les liens
+//	GET    /api/public/{jeton}                   schéma partagé (sans authentification)
 //	GET    /api/library  /  PUT /api/library      bibliothèque Excalidraw
 //	GET    /api/settings / PUT {"title","channel"} paramètres (titre, logo, canal)
 //	GET    /api/logo  /  PUT (image/png)  /  DELETE   logo 64x64
@@ -24,11 +29,15 @@
 package api
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
+	"path"
+	"strings"
+	"time"
 
 	"github.com/vblogio/excalidraw-go/internal/storage"
 	"github.com/vblogio/excalidraw-go/internal/update"
@@ -61,6 +70,11 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/history/version", h.readVersion)
 	mux.HandleFunc("POST /api/history/snapshot", h.snapshot)
 	mux.HandleFunc("POST /api/history/restore", h.restore)
+	mux.HandleFunc("GET /api/shares", h.shares)
+	mux.HandleFunc("POST /api/shares", h.createShare)
+	mux.HandleFunc("DELETE /api/shares", h.revokeShare)
+	mux.HandleFunc("POST /api/shares/revoke-all", h.revokeAllShares)
+	mux.HandleFunc("GET /api/public/{token}", h.public)
 	mux.HandleFunc("GET /api/library", h.readLibrary)
 	mux.HandleFunc("PUT /api/library", h.writeLibrary)
 	mux.HandleFunc("GET /api/settings", h.readSettings)
@@ -389,6 +403,83 @@ func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("ETag", etag)
 	writeJSON(w, http.StatusOK, entry)
+}
+
+func (h *Handler) shares(w http.ResponseWriter, r *http.Request) {
+	l, err := h.Store.Shares(r.URL.Query().Get("path"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, l)
+}
+
+type shareReq struct {
+	Path string `json:"path"`
+	Days int    `json:"days"`
+}
+
+func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
+	var req shareReq
+	if !h.decode(w, r, &req) {
+		return
+	}
+	if req.Days < 0 || req.Days > 3650 {
+		writeErr(w, http.StatusBadRequest, "durée de 0 (sans expiration) à 3650 jours")
+		return
+	}
+	sh, err := h.Store.CreateShare(req.Path, time.Duration(req.Days)*24*time.Hour)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, sh)
+}
+
+func (h *Handler) revokeShare(w http.ResponseWriter, r *http.Request) {
+	if err := h.Store.RevokeShare(r.URL.Query().Get("id")); err != nil {
+		fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) revokeAllShares(w http.ResponseWriter, r *http.Request) {
+	if err := h.Store.RevokeAllShares(); err != nil {
+		fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// public sert un schéma partagé, hors authentification (voir cmd/server).
+// Seuls le nom du schéma, son contenu et l'apparence (titre, logo) sont exposés.
+func (h *Handler) public(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	sh, data, err := h.Store.ReadShared(r.PathValue("token"))
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			writeErr(w, http.StatusNotFound, "lien invalide, expiré ou révoqué")
+		} else {
+			fail(w, err)
+		}
+		return
+	}
+	out := struct {
+		Name  string          `json:"name"`
+		Title string          `json:"title"`
+		Logo  string          `json:"logo,omitempty"`
+		Scene json.RawMessage `json:"scene"`
+	}{Name: strings.TrimSuffix(path.Base(sh.Path), storage.Ext), Scene: data}
+	if st, err := h.Store.ReadSettings(); err == nil {
+		out.Title = st.Title
+	}
+	if logo, err := h.Store.ReadLogo(); err == nil {
+		out.Logo = "data:image/png;base64," + base64.StdEncoding.EncodeToString(logo)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (h *Handler) readLibrary(w http.ResponseWriter, r *http.Request) {

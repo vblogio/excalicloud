@@ -183,3 +183,19 @@ export const TagIcon = icon(
     <path d="M4 7v3.86a2 2 0 0 0 .59 1.41l7.71 7.71a2.4 2.4 0 0 0 3.4 0l4.27-4.27a2.4 2.4 0 0 0 0-3.4L12.26 4.59A2 2 0 0 0 10.85 4H7a3 3 0 0 0-3 3z" />
   </>,
 );
+
+export const ShareIcon = icon(
+  <>
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="6" r="3" />
+    <circle cx="18" cy="18" r="3" />
+    <path d="M8.7 10.7l6.6-3.4M8.7 13.3l6.6 3.4" />
+  </>,
+);
+
+export const EyeIcon = icon(
+  <>
+    <circle cx="12" cy="12" r="2" />
+    <path d="M22 12c-2.67 4.67-6 7-10 7s-7.33-2.33-10-7c2.67-4.67 6-7 10-7s7.33 2.33 10 7" />
+  </>,
+);

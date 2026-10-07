@@ -1227,3 +1227,66 @@ button.chip.on,
   display: flex;
   gap: 6px;
 }
+
+/* --- Partage en lecture seule ---------------------------------------------- */
+
+.share-view {
+  display: grid;
+  grid-template-rows: var(--topbar-h) 1fr;
+  grid-template-columns: 1fr;
+  height: 100dvh;
+}
+.share-view .canvas {
+  grid-area: 2 / 1;
+}
+.share-view .brand {
+  cursor: default;
+}
+.status.readonly {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ex-primary);
+}
+.share-dialog {
+  width: min(520px, 100%);
+}
+.share-create {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.share-create .radio-group button {
+  min-width: 0;
+  padding: 6px 10px;
+}
+.share-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+.share-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.share-list .empty {
+  font-size: 13px;
+}
+.share-list .cmd code {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+@media (max-width: 768px) {
+  .share-view .status.readonly {
+    display: inline-flex;
+  }
+}

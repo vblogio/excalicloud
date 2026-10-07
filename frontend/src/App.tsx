@@ -16,7 +16,8 @@ import type {
 import type { OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { api, ApiError, basename, stripExt, type Settings } from "./api";
 import { Explorer } from "./Explorer";
-import { CloseIcon, HistoryIcon, MenuIcon, MoonIcon, SaveIcon, SettingsIcon, SunIcon, UpdateIcon } from "./icons";
+import { CloseIcon, HistoryIcon, MenuIcon, MoonIcon, SaveIcon, SettingsIcon, ShareIcon, SunIcon, UpdateIcon } from "./icons";
+import { ShareDialog } from "./ShareDialog";
 import { HistoryDialog } from "./HistoryDialog";
 import { Splitter } from "./Splitter";
 import { SettingsDialog, DEFAULT_TITLE } from "./SettingsDialog";
@@ -93,6 +94,7 @@ export default function App() {
   const pending = pendingVersion(updateStatus, settings.channel);
   const [customizing, setCustomizing] = useState<false | "all" | "excalidraw">(false);
   const [historyFor, setHistoryFor] = useState<string | null>(null);
+  const [shareFor, setShareFor] = useState<string | null>(null);
 
   const excalidraw = useRef<ExcalidrawImperativeAPI | null>(null);
   const pathRef = useRef<string | null>(null); // schéma ouvert (survit aux renommages)
@@ -412,6 +414,14 @@ export default function App() {
             </button>
             <button
               className="icon-btn"
+              aria-label="Partager en lecture seule"
+              title="Partager en lecture seule"
+              onClick={() => save().then(() => setShareFor(scene.path))}
+            >
+              <ShareIcon />
+            </button>
+            <button
+              className="icon-btn"
               aria-label="Fermer le schéma"
               title="Fermer le schéma"
               onClick={() => save().then(closeFile)}
@@ -458,6 +468,7 @@ export default function App() {
           onMoved={onMoved}
           onDeleted={onDeleted}
           onHistory={showHistory}
+          onShare={setShareFor}
         />
       </aside>
       <Splitter
@@ -506,6 +517,8 @@ export default function App() {
           onClose={() => setHistoryFor(null)}
         />
       )}
+
+      {shareFor && <ShareDialog path={shareFor} onClose={() => setShareFor(null)} />}
 
       {customizing && (
         <SettingsDialog

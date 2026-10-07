@@ -64,6 +64,10 @@ type Store struct {
 
 	metaMu sync.Mutex          // tags et favoris (meta.go)
 	meta   map[string]itemMeta // nil : pas encore chargé
+
+	sharesMu sync.Mutex // liens de partage (share.go)
+	shareKey []byte     // clé HMAC ; nil : pas encore chargée
+	fixedKey bool       // clé imposée par SHARE_SECRET
 }
 
 // New crée le répertoire racine si besoin et renvoie un Store.
@@ -345,6 +349,7 @@ func (s *Store) Move(from, to string) (Entry, error) {
 	s.moveThumb(cf, ct, fi.IsDir())
 	s.moveHistory(cf, ct)
 	s.moveMeta(cf, ct)
+	s.moveShares(cf, ct)
 	fi, err = os.Stat(at)
 	if err != nil {
 		return Entry{}, err
@@ -450,6 +455,7 @@ func (s *Store) Delete(rel string, recursive bool) error {
 	s.removeThumb(c, fi.IsDir())
 	s.trashHistory(c, trash)
 	s.removeMeta(c)
+	s.removeShares(c)
 	return nil
 }
 

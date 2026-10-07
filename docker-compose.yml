@@ -26,6 +26,9 @@ services:
       HISTORY_KEEP: ${HISTORY_KEEP:-50}
       HISTORY_INTERVAL: ${HISTORY_INTERVAL:-10m}
       HISTORY_MAX_AGE: ${HISTORY_MAX_AGE:-0}
+      # Clé de signature des liens de partage /s/<jeton> (16 caractères min.).
+      # Vide : clé aléatoire générée dans DATA_DIR/.share-secret.
+      SHARE_SECRET: ${SHARE_SECRET:-}
     volumes:
       # Volume nommé : les droits (uid 65532) sont hérités de l'image.
       # Pour un bind mount (ex. ./data:/data), faire `chown -R 65532:65532 ./data`.

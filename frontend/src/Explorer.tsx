@@ -60,6 +60,8 @@ interface Props {
   onDeleted: (path: string) => void;
   /** Affiche l'historique des versions d'un schéma. */
   onHistory: (path: string) => void;
+  /** Affiche les liens de partage d'un schéma. */
+  onShare: (path: string) => void;
 }
 
 type View = "list" | "grid";
@@ -86,7 +88,7 @@ const initialView = (): View => {
 const canMoveInto = (path: string, targetDir: string) =>
   dirname(path) !== targetDir && targetDir !== path && !targetDir.startsWith(path + "/");
 
-export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHistory }: Props) {
+export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHistory, onShare }: Props) {
   const [dir, setDir] = useState(() => (current ? dirname(current) : ""));
   const [entries, setEntries] = useState<Entry[]>([]);
   const [query, setQuery] = useState("");
@@ -456,6 +458,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
       <button onClick={() => setMoving([e.path])}>Déplacer…</button>
       {!e.isDir && <button onClick={() => duplicate(e)}>Dupliquer</button>}
       {!e.isDir && <button onClick={() => onHistory(e.path)}>Historique…</button>}
+      {!e.isDir && <button onClick={() => onShare(e.path)}>Partager…</button>}
       <button onClick={() => toggleFavorite([e])}>
         {e.favorite ? <StarFilledIcon /> : <StarIcon />}
         {e.favorite ? "Retirer des favoris" : "Favori"}

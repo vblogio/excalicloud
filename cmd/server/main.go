@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -57,6 +58,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Clé de signature des liens de partage : SHARE_SECRET, sinon DATA_DIR/.share-secret.
+	if secret := os.Getenv("SHARE_SECRET"); secret != "" {
+		if len(secret) < 16 {
+			slog.Error("SHARE_SECRET trop court (16 caractères minimum)")
+			os.Exit(1)
+		}
+		store.SetShareSecret(secret)
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -85,7 +95,7 @@ func main() {
 
 	var h http.Handler = mux
 	if user, pass := os.Getenv("AUTH_USER"), os.Getenv("AUTH_PASSWORD"); user != "" && pass != "" {
-		h = basicAuth(h, user, pass)
+		h = basicAuth(h, user, pass, public)
 		slog.Info("authentification Basic activée", "user", user)
 	}
 	h = logRequests(securityHeaders(h))
@@ -155,7 +165,7 @@ func spa() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := path.Clean(r.URL.Path)
 		if p != "/" {
-			if _, err := fs.Stat(dist, p[1:]); err == nil {
+			if fi, err := fs.Stat(dist, p[1:]); err == nil && !fi.IsDir() {
 				// Les assets Vite sont nommés par empreinte : cache long.
 				if path.Dir(p) == "/assets" {
 					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
@@ -175,9 +185,24 @@ func spa() http.Handler {
 	})
 }
 
-func basicAuth(next http.Handler, user, pass string) http.Handler {
+// public indique les chemins servis sans authentification : sonde, schémas
+// partagés (/s/<jeton> et son API) et fichiers statiques du build (code de
+// l'application et polices, sans aucune donnée).
+func public(p string) bool {
+	switch {
+	case p == "/healthz", strings.HasPrefix(p, "/s/"), strings.HasPrefix(p, "/api/public/"):
+		return true
+	case strings.HasPrefix(p, "/api/"), p == "/", p == "/index.html":
+		return false
+	}
+	dist, _ := fs.Sub(web.Dist, "dist")
+	fi, err := fs.Stat(dist, strings.TrimPrefix(path.Clean(p), "/"))
+	return err == nil && !fi.IsDir()
+}
+
+func basicAuth(next http.Handler, user, pass string, public func(string) bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/healthz" {
+		if public(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -198,6 +223,9 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "same-origin")
 		h.Set("X-Frame-Options", "SAMEORIGIN")
+		if strings.HasPrefix(r.URL.Path, "/s/") {
+			h.Set("X-Robots-Tag", "noindex, nofollow") // liens de partage
+		}
 		next.ServeHTTP(w, r)
 	})
 }
