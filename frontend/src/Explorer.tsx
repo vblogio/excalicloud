@@ -11,6 +11,25 @@ import {
   withExt,
   type Entry,
 } from "./api";
+import {
+  CloseIcon,
+  DeselectIcon,
+  DotsIcon,
+  FilePlusIcon,
+  FolderIcon,
+  FolderPlusIcon,
+  FolderUploadIcon,
+  GridIcon,
+  ListIcon,
+  MoveIcon,
+  RefreshIcon,
+  SearchIcon,
+  SelectAllIcon,
+  TrashIcon,
+  UpIcon,
+  UploadIcon,
+} from "./icons";
+import { collectDrop, collectFiles, hasFiles, type Collected } from "./importer";
 import { MoveDialog } from "./MoveDialog";
 import { Thumb } from "./Thumb";
 
@@ -71,7 +90,11 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted }: Pr
   const [moving, setMoving] = useState<string[] | null>(null); // éléments du dialogue « Déplacer vers »
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; detail?: string } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null); // progression d'un import
+  const [fileDrag, setFileDrag] = useState(false); // fichiers du système survolant l'explorateur
   const fileInput = useRef<HTMLInputElement>(null);
+  const dirInput = useRef<HTMLInputElement>(null);
 
   const list = results ?? entries;
 
@@ -269,12 +292,51 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted }: Pr
       if (results) setResults(await api.search(query));
     });
 
-  const importFiles = (files: FileList | null) =>
+  /**
+   * Importe fichiers et arborescences dans targetDir : les dossiers sont recréés,
+   * seuls les .excalidraw sont importés, les schémas déjà présents sont conservés.
+   */
+  const importTree = (pending: Collected | Promise<Collected>, targetDir: string) =>
     guard(async () => {
-      for (const f of Array.from(files ?? [])) {
-        await api.write(join(dir, withExt(stripExt(f.name.replace(/\.json$/i, "")))), await f.text(), "*");
+      setNotice(null);
+      setBusy("Lecture…");
+      try {
+        const { files, dirs, ignored } = await pending;
+        for (const d of dirs) {
+          try {
+            await api.mkdir(join(targetDir, d));
+          } catch (err) {
+            if (!(err instanceof ApiError && err.status === 409)) throw err; // déjà présent
+          }
+        }
+        let done = 0;
+        const existing: string[] = [];
+        const failed: string[] = [];
+        for (const { rel, file } of files) {
+          setBusy(`Import ${done + existing.length + failed.length + 1}/${files.length}…`);
+          try {
+            await api.write(join(targetDir, rel), await file.text(), "*");
+            done++;
+          } catch (err) {
+            if (err instanceof ApiError && err.status === 409) existing.push(rel);
+            else failed.push(`${rel} : ${err instanceof Error ? err.message : err}`);
+          }
+        }
+        await refresh();
+        const parts = [`${plural(done, "schéma")} importé${done > 1 ? "s" : ""}`];
+        if (dirs.length) parts.push(plural(dirs.length, "dossier"));
+        if (existing.length) parts.push(`${existing.length} déjà présent${existing.length > 1 ? "s" : ""} (conservé${existing.length > 1 ? "s" : ""})`);
+        if (ignored.length) parts.push(`${plural(ignored.length, "fichier")} ignoré${ignored.length > 1 ? "s" : ""} (pas .excalidraw)`);
+        const detail = [
+          ...failed.map((f) => `Échec — ${f}`),
+          ...existing.map((f) => `Déjà présent — ${f}`),
+          ...ignored.map((f) => `Ignoré — ${f}`),
+        ].join("\n");
+        setNotice({ text: parts.join(" · "), detail: detail || undefined });
+        if (failed.length) setError(`${plural(failed.length, "fichier")} en échec : ${failed.join(" ; ")}`);
+      } finally {
+        setBusy(null);
       }
-      await refresh();
     });
 
   // --- Glisser-déposer (souris) ; sur mobile : sélection + « Déplacer vers… » -
@@ -294,17 +356,23 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted }: Pr
     }
   };
 
+  // Cibles de dépôt : dossiers, fil d'Ariane et « .. ». Accepte les éléments de
+  // l'explorateur (déplacement) et les fichiers/dossiers du système (import).
   const dropProps = (targetDir: string) => ({
     onDragOver: (ev: DragEvent) => {
-      if (!ev.dataTransfer.types.includes(DND_TYPE)) return;
+      const external = hasFiles(ev.dataTransfer);
+      if (!external && !ev.dataTransfer.types.includes(DND_TYPE)) return;
       ev.preventDefault();
-      ev.dataTransfer.dropEffect = "move";
+      ev.dataTransfer.dropEffect = external ? "copy" : "move";
       setDropTarget(targetDir);
     },
     onDragLeave: () => setDropTarget(null),
     onDrop: (ev: DragEvent) => {
       ev.preventDefault();
+      ev.stopPropagation(); // l'explorateur n'importe pas une seconde fois
       setDropTarget(null);
+      setFileDrag(false);
+      if (hasFiles(ev.dataTransfer)) return importTree(collectDrop(ev.dataTransfer), targetDir);
       let paths: string[] = [];
       try {
         paths = JSON.parse(ev.dataTransfer.getData(DND_TYPE));
@@ -318,11 +386,31 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted }: Pr
   // --- Rendu ---------------------------------------------------------------
 
   const crumbs = dir ? dir.split("/") : [];
+  const importDir = results ? "" : dir; // pendant une recherche, le dossier courant n'est pas affiché
+
+  // Dépôt n'importe où dans l'explorateur : import dans le dossier courant.
+  const zoneProps = {
+    onDragOver: (ev: DragEvent) => {
+      if (!hasFiles(ev.dataTransfer)) return;
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = "copy";
+      setFileDrag(true);
+    },
+    onDragLeave: (ev: DragEvent) => {
+      if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) setFileDrag(false);
+    },
+    onDrop: (ev: DragEvent) => {
+      if (!hasFiles(ev.dataTransfer)) return;
+      ev.preventDefault();
+      setFileDrag(false);
+      importTree(collectDrop(ev.dataTransfer), importDir);
+    },
+  };
 
   const icon = (e: Entry) =>
     e.isDir ? (
-      <span className="icon" aria-hidden>
-        📁
+      <span className="icon folder" aria-hidden>
+        <FolderIcon size={view === "grid" ? 40 : 20} />
       </span>
     ) : (
       <Thumb path={e.path} version={e.modTime} />
@@ -387,9 +475,10 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted }: Pr
           <button
             className="icon-btn more"
             aria-label="Actions"
+            title="Actions"
             onClick={() => setMenuFor(menuFor === e.path ? null : e.path)}
           >
-            ⋯
+            <DotsIcon />
           </button>
         </div>
         {view === "list" && menuFor === e.path && actions(e)}
@@ -404,44 +493,88 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted }: Pr
   };
 
   return (
-    <div className="explorer" onKeyDown={onKeyDown}>
+    <div className={`explorer ${fileDrag ? "file-drag" : ""}`} onKeyDown={onKeyDown} {...zoneProps}>
       <div className="toolbar">
-        <button onClick={newDrawing} title="Nouveau schéma">＋ Schéma</button>
-        <button onClick={newFolder} title="Nouveau dossier">＋ Dossier</button>
-        <button onClick={() => fileInput.current?.click()} title="Importer des fichiers .excalidraw">
-          Importer
+        <button className="ex-btn" onClick={newDrawing} title="Nouveau schéma">
+          <FilePlusIcon />
+          <span>Schéma</span>
+        </button>
+        <button className="ex-btn" onClick={newFolder} title="Nouveau dossier">
+          <FolderPlusIcon />
+          <span>Dossier</span>
+        </button>
+        <button
+          className="ex-btn"
+          onClick={() => fileInput.current?.click()}
+          title="Importer des fichiers .excalidraw (ou glisser-déposer fichiers et dossiers ici)"
+        >
+          <UploadIcon />
+          <span>Importer</span>
+        </button>
+        <button
+          className="ex-btn square"
+          onClick={() => dirInput.current?.click()}
+          title="Importer un dossier complet (arborescence recréée, seuls les .excalidraw sont importés)"
+          aria-label="Importer un dossier"
+        >
+          <FolderUploadIcon />
         </button>
         <input
           ref={fileInput}
           type="file"
-          accept=".excalidraw,application/json"
+          accept=".excalidraw"
           multiple
           hidden
           onChange={(ev) => {
-            importFiles(ev.target.files);
+            if (ev.target.files) importTree(collectFiles(ev.target.files), importDir);
+            ev.target.value = "";
+          }}
+        />
+        <input
+          ref={dirInput}
+          type="file"
+          multiple
+          hidden
+          {...{ webkitdirectory: "" }}
+          onChange={(ev) => {
+            if (ev.target.files) importTree(collectFiles(ev.target.files), importDir);
             ev.target.value = "";
           }}
         />
       </div>
 
       <div className="searchbar">
-        <input
-          className="search"
-          type="search"
-          placeholder="Rechercher…"
-          value={query}
-          onChange={(ev) => setQuery(ev.target.value)}
-        />
-        <button
-          className="icon-btn"
-          onClick={() => setView(view === "grid" ? "list" : "grid")}
-          title={view === "grid" ? "Affichage en liste" : "Affichage en vignettes"}
-          aria-label={view === "grid" ? "Affichage en liste" : "Affichage en vignettes"}
-        >
-          {view === "grid" ? "☰" : "▦"}
-        </button>
+        <label className="search">
+          <SearchIcon />
+          <input
+            type="search"
+            placeholder="Rechercher…"
+            value={query}
+            onChange={(ev) => setQuery(ev.target.value)}
+          />
+        </label>
+        <div className="segmented" role="group" aria-label="Affichage">
+          <button
+            className={`icon-btn ${view === "grid" ? "on" : ""}`}
+            onClick={() => setView("grid")}
+            title="Affichage en vignettes"
+            aria-label="Affichage en vignettes"
+            aria-pressed={view === "grid"}
+          >
+            <GridIcon />
+          </button>
+          <button
+            className={`icon-btn ${view === "list" ? "on" : ""}`}
+            onClick={() => setView("list")}
+            title="Affichage en liste"
+            aria-label="Affichage en liste"
+            aria-pressed={view === "list"}
+          >
+            <ListIcon />
+          </button>
+        </div>
         <button className="icon-btn" onClick={refresh} title="Rafraîchir" aria-label="Rafraîchir">
-          ⟳
+          <RefreshIcon />
         </button>
       </div>
 
@@ -493,13 +626,21 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted }: Pr
           {error}
         </div>
       )}
+      {busy && <div className="notice busy">{busy}</div>}
+      {notice && !busy && (
+        <div className="notice" onClick={() => setNotice(null)} title={notice.detail ? `${notice.detail}\n\n(clic pour masquer)` : "Clic pour masquer"}>
+          {notice.text}
+        </div>
+      )}
 
       <ul className={`entries ${view} ${selected.size > 0 ? "selecting" : ""}`}>
         {!results && dir && (
           <li className={`item dir up ${dropTarget === dirname(dir) ? "drop" : ""}`}>
             <div className="row" {...dropProps(dirname(dir))}>
               <button className="name" onClick={() => setDir(dirname(dir))}>
-                <span className="icon" aria-hidden>↩</span>
+                <span className="icon" aria-hidden>
+                  <UpIcon size={view === "grid" ? 32 : 20} />
+                </span>
                 <span className="label">..</span>
               </button>
             </div>
@@ -508,6 +649,14 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted }: Pr
         {list.flatMap(item)}
         {list.length === 0 && <li className="muted empty">{results ? "Aucun résultat" : "Dossier vide"}</li>}
       </ul>
+
+      {fileDrag && (
+        <div className="drop-hint" aria-hidden>
+          <FolderUploadIcon size={28} />
+          <span>Déposer pour importer dans « {importDir ? basename(importDir) : "Racine"} »</span>
+          <small>Les dossiers sont recréés · seuls les .excalidraw sont importés</small>
+        </div>
+      )}
 
       {moving && (
         <MoveDialog
