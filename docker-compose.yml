@@ -1,0 +1,26 @@
+services:
+  excalidraw:
+    build: .
+    image: excalidraw-go:local
+    container_name: excalidraw-go
+    restart: unless-stopped
+    ports:
+      - "${EXCALIDRAW_PORT:-8080}:8080"
+    environment:
+      # Authentification Basic optionnelle (laisser vide pour la désactiver,
+      # par exemple derrière un reverse proxy qui gère déjà l'authentification).
+      AUTH_USER: ${AUTH_USER:-}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:-}
+      # Taille max d'un schéma (images embarquées en base64 comprises).
+      MAX_BODY_MB: ${MAX_BODY_MB:-50}
+    volumes:
+      # Volume nommé : les droits (uid 65532) sont hérités de l'image.
+      # Pour un bind mount (ex. ./data:/data), faire `chown -R 65532:65532 ./data`.
+      - excalidraw-data:/data
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  excalidraw-data:
