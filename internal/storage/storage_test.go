@@ -145,11 +145,11 @@ func TestMoveMany(t *testing.T) {
 	}
 }
 
-var png = []byte("\x89PNG\r\n\x1a\nfake")
+var fakePNG = []byte("\x89PNG\r\n\x1a\nfake")
 
 func TestThumbs(t *testing.T) {
 	s := newStore(t)
-	if err := s.WriteThumb("d/a.excalidraw", png); !errors.Is(err, ErrNotFound) {
+	if err := s.WriteThumb("d/a.excalidraw", fakePNG); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("miniature d'un schéma absent : %v", err)
 	}
 	if _, _, err := s.Write("d/a.excalidraw", []byte(doc), "", true); err != nil {
@@ -161,10 +161,10 @@ func TestThumbs(t *testing.T) {
 	if _, _, err := s.ReadThumb("d/a.excalidraw"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("miniature inexistante : %v", err)
 	}
-	if err := s.WriteThumb("d/a.excalidraw", png); err != nil {
+	if err := s.WriteThumb("d/a.excalidraw", fakePNG); err != nil {
 		t.Fatal(err)
 	}
-	if b, _, err := s.ReadThumb("d/a.excalidraw"); err != nil || string(b) != string(png) {
+	if b, _, err := s.ReadThumb("d/a.excalidraw"); err != nil || string(b) != string(fakePNG) {
 		t.Fatalf("lecture : %q, %v", b, err)
 	}
 	// Suit le déplacement du dossier, la copie, puis la suppression.

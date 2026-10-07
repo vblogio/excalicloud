@@ -11,6 +11,8 @@
 //	DELETE /api/entry?path=x[&recursive=true]     mise à la corbeille
 //	GET    /api/thumb?path=x  /  PUT (image/png)   miniature d'un schéma
 //	GET    /api/library  /  PUT /api/library      bibliothèque Excalidraw
+//	GET    /api/settings / PUT {"title":"..."}    personnalisation (titre, logo)
+//	GET    /api/logo  /  PUT (image/png)  /  DELETE   logo 64x64
 package api
 
 import (
@@ -44,6 +46,11 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/thumb", h.writeThumb)
 	mux.HandleFunc("GET /api/library", h.readLibrary)
 	mux.HandleFunc("PUT /api/library", h.writeLibrary)
+	mux.HandleFunc("GET /api/settings", h.readSettings)
+	mux.HandleFunc("PUT /api/settings", h.writeSettings)
+	mux.HandleFunc("GET /api/logo", h.readLogo)
+	mux.HandleFunc("PUT /api/logo", h.writeLogo)
+	mux.HandleFunc("DELETE /api/logo", h.deleteLogo)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "route inconnue")
 	})
@@ -69,7 +76,8 @@ func fail(w http.ResponseWriter, err error) {
 		writeErr(w, http.StatusConflict, err.Error())
 	case errors.Is(err, storage.ErrConflict):
 		writeErr(w, http.StatusPreconditionFailed, err.Error())
-	case errors.Is(err, storage.ErrInvalidPath), errors.Is(err, storage.ErrInvalidJSON):
+	case errors.Is(err, storage.ErrInvalidPath), errors.Is(err, storage.ErrInvalidJSON),
+		errors.Is(err, storage.ErrInvalidImage):
 		writeErr(w, http.StatusBadRequest, err.Error())
 	case errors.As(err, &tooBig):
 		writeErr(w, http.StatusRequestEntityTooLarge, "contenu trop volumineux")
@@ -277,4 +285,67 @@ func (h *Handler) writeLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) readSettings(w http.ResponseWriter, r *http.Request) {
+	st, err := h.Store.ReadSettings()
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	writeJSON(w, http.StatusOK, st)
+}
+
+type settingsReq struct {
+	Title string `json:"title"`
+}
+
+func (h *Handler) writeSettings(w http.ResponseWriter, r *http.Request) {
+	var req settingsReq
+	if !h.decode(w, r, &req) {
+		return
+	}
+	st, err := h.Store.WriteTitle(req.Title)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+func (h *Handler) readLogo(w http.ResponseWriter, r *http.Request) {
+	data, err := h.Store.ReadLogo()
+	if err != nil {
+		w.Header().Set("Cache-Control", "no-store")
+		fail(w, err)
+		return
+	}
+	// L'URL porte la version du logo (?v=...) : un nouveau logo change l'URL.
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	w.Header().Set("Content-Type", "image/png")
+	_, _ = w.Write(data)
+}
+
+func (h *Handler) writeLogo(w http.ResponseWriter, r *http.Request) {
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, storage.MaxLogoUpload))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	st, err := h.Store.WriteLogo(data)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+func (h *Handler) deleteLogo(w http.ResponseWriter, r *http.Request) {
+	st, err := h.Store.DeleteLogo()
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
 }
