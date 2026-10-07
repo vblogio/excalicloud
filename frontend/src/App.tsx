@@ -16,6 +16,7 @@ import type {
 import type { OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { api, ApiError, basename, stripExt } from "./api";
 import { Explorer } from "./Explorer";
+import { storeThumb } from "./thumbs";
 
 type Theme = "light" | "dark";
 type SaveState = "saved" | "dirty" | "saving" | "error";
@@ -91,6 +92,8 @@ export default function App() {
     try {
       etagRef.current = await api.write(path, body, force ? "" : etagRef.current);
       savedVersion.current = version;
+      // Miniature pour l'explorateur ; un échec n'affecte pas la sauvegarde.
+      await storeThumb(path, elements, appState, files).catch((e) => console.warn("miniature", e));
       // D'autres modifications ont pu arriver pendant l'envoi.
       const now = sceneVersion(ex.getSceneElements(), ex.getAppState(), ex.getFiles());
       setSaveState(now === version ? "saved" : "dirty");

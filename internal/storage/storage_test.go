@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 const doc = `{"type":"excalidraw","version":2,"elements":[]}`
@@ -97,5 +98,98 @@ func TestSymlinkEscape(t *testing.T) {
 	}
 	if _, _, err := s.Write("evil/x.excalidraw", []byte(doc), "", false); !errors.Is(err, ErrInvalidPath) {
 		t.Fatalf("échappement par symlink non bloqué : %v", err)
+	}
+}
+
+func TestMoveMany(t *testing.T) {
+	s := newStore(t)
+	for _, p := range []string{"a.excalidraw", "b.excalidraw", "src/c.excalidraw", "dst/b.excalidraw"} {
+		if _, _, err := s.Write(p, []byte(doc), "", true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.Mkdir("src/sub"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.MoveMany([]string{"a.excalidraw"}, "a.excalidraw"); !errors.Is(err, ErrInvalidPath) {
+		t.Fatalf("destination fichier acceptée : %v", err)
+	}
+	res, err := s.MoveMany([]string{"a.excalidraw", "b.excalidraw", "src/c.excalidraw", "src/sub", "dst/b.excalidraw", "dst", "nope.excalidraw"}, "dst")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []struct {
+		to  string
+		err error
+	}{
+		{"dst/a.excalidraw", nil},
+		{"", ErrExists},
+		{"dst/c.excalidraw", nil},
+		{"dst/sub", nil},
+		{"dst/b.excalidraw", nil}, // déjà dans dst : ignoré
+		{"", ErrInvalidPath},      // dossier dans lui-même
+		{"", ErrNotFound},
+	}
+	for i, w := range want {
+		if res[i].To != w.to || !errors.Is(res[i].Err(), w.err) {
+			t.Errorf("%s : to=%q err=%v ; attendu %q, %v", res[i].From, res[i].To, res[i].Err(), w.to, w.err)
+		}
+	}
+	if _, _, err := s.Read("b.excalidraw"); err != nil {
+		t.Fatalf("b déplacé malgré le conflit : %v", err)
+	}
+	// Vers la racine.
+	res, err = s.MoveMany([]string{"dst/sub", "b.excalidraw"}, "")
+	if err != nil || res[0].To != "sub" || res[0].Err() != nil || res[1].To != "b.excalidraw" {
+		t.Fatalf("vers la racine : %+v, %v", res, err)
+	}
+}
+
+var png = []byte("\x89PNG\r\n\x1a\nfake")
+
+func TestThumbs(t *testing.T) {
+	s := newStore(t)
+	if err := s.WriteThumb("d/a.excalidraw", png); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("miniature d'un schéma absent : %v", err)
+	}
+	if _, _, err := s.Write("d/a.excalidraw", []byte(doc), "", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WriteThumb("d/a.excalidraw", []byte("<svg/>")); !errors.Is(err, ErrInvalidPath) {
+		t.Fatalf("non-PNG accepté : %v", err)
+	}
+	if _, _, err := s.ReadThumb("d/a.excalidraw"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("miniature inexistante : %v", err)
+	}
+	if err := s.WriteThumb("d/a.excalidraw", png); err != nil {
+		t.Fatal(err)
+	}
+	if b, _, err := s.ReadThumb("d/a.excalidraw"); err != nil || string(b) != string(png) {
+		t.Fatalf("lecture : %q, %v", b, err)
+	}
+	// Suit le déplacement du dossier, la copie, puis la suppression.
+	if _, err := s.Move("d", "e"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.ReadThumb("e/a.excalidraw"); err != nil {
+		t.Fatalf("après déplacement : %v", err)
+	}
+	if _, err := s.Copy("e/a.excalidraw", "e/b.excalidraw"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.ReadThumb("e/b.excalidraw"); err != nil {
+		t.Fatalf("après copie : %v", err)
+	}
+	if err := s.Delete("e/a.excalidraw", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(s.root, thumbsDir, "e", "a.excalidraw.png")); !os.IsNotExist(err) {
+		t.Fatalf("miniature non supprimée : %v", err)
+	}
+	// Périmée après modification du schéma.
+	old := time.Now().Add(-time.Hour)
+	_ = os.Chtimes(filepath.Join(s.root, thumbsDir, "e", "b.excalidraw.png"), old, old)
+	if _, _, err := s.ReadThumb("e/b.excalidraw"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("miniature périmée servie : %v", err)
 	}
 }

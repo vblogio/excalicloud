@@ -6,8 +6,10 @@
 //	PUT    /api/file?path=a/b.excalidraw écriture (If-Match / If-None-Match: *)
 //	POST   /api/folder   {"path":"a/b"}           création de dossier
 //	POST   /api/move     {"from":"x","to":"y"}    renommage / déplacement
+//	POST   /api/move-many {"paths":[...],"dir":"d"} déplacement multiple
 //	POST   /api/copy     {"from":"x","to":"y"}    duplication d'un schéma
 //	DELETE /api/entry?path=x[&recursive=true]     mise à la corbeille
+//	GET    /api/thumb?path=x  /  PUT (image/png)   miniature d'un schéma
 //	GET    /api/library  /  PUT /api/library      bibliothèque Excalidraw
 package api
 
@@ -35,8 +37,11 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/file", h.writeFile)
 	mux.HandleFunc("POST /api/folder", h.mkdir)
 	mux.HandleFunc("POST /api/move", h.move)
+	mux.HandleFunc("POST /api/move-many", h.moveMany)
 	mux.HandleFunc("POST /api/copy", h.copy)
 	mux.HandleFunc("DELETE /api/entry", h.delete)
+	mux.HandleFunc("GET /api/thumb", h.readThumb)
+	mux.HandleFunc("PUT /api/thumb", h.writeThumb)
 	mux.HandleFunc("GET /api/library", h.readLibrary)
 	mux.HandleFunc("PUT /api/library", h.writeLibrary)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
@@ -173,6 +178,57 @@ func (h *Handler) move(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, entry)
+}
+
+type moveManyReq struct {
+	Paths []string `json:"paths"`
+	Dir   string   `json:"dir"`
+}
+
+// moveMany renvoie toujours 200 avec le détail par élément : le client
+// affiche les échecs partiels (ex. nom déjà pris dans la destination).
+func (h *Handler) moveMany(w http.ResponseWriter, r *http.Request) {
+	var req moveManyReq
+	if !h.decode(w, r, &req) {
+		return
+	}
+	if len(req.Paths) == 0 || len(req.Paths) > 1000 {
+		writeErr(w, http.StatusBadRequest, "entre 1 et 1000 chemins attendus")
+		return
+	}
+	res, err := h.Store.MoveMany(req.Paths, req.Dir)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) readThumb(w http.ResponseWriter, r *http.Request) {
+	data, mod, err := h.Store.ReadThumb(r.URL.Query().Get("path"))
+	if err != nil {
+		// Pas de mise en cache d'une absence : la miniature va être générée.
+		w.Header().Set("Cache-Control", "no-store")
+		fail(w, err)
+		return
+	}
+	// L'URL porte la date du schéma (?v=...) : une nouvelle version change l'URL.
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Last-Modified", mod.UTC().Format(http.TimeFormat))
+	_, _ = w.Write(data)
+}
+
+func (h *Handler) writeThumb(w http.ResponseWriter, r *http.Request) {
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, storage.MaxThumbSize))
+	if err == nil {
+		err = h.Store.WriteThumb(r.URL.Query().Get("path"), data)
+	}
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) copy(w http.ResponseWriter, r *http.Request) {
