@@ -25,6 +25,7 @@ const Ext = ".excalidraw"
 
 const (
 	trashDir    = ".trash"
+	thumbsDir   = ".thumbs"
 	libraryFile = ".library.excalidrawlib"
 )
 
@@ -358,11 +359,61 @@ func (s *Store) Move(from, to string) (Entry, error) {
 	if err := os.Rename(af, at); err != nil {
 		return Entry{}, mapErr(err)
 	}
+	s.moveThumb(cf, ct, fi.IsDir())
 	fi, err = os.Stat(at)
 	if err != nil {
 		return Entry{}, err
 	}
 	return toEntry(ct, fi), nil
+}
+
+// MoveResult est le résultat d'un déplacement unitaire dans MoveMany.
+type MoveResult struct {
+	From  string `json:"from"`
+	To    string `json:"to,omitempty"`
+	Error string `json:"error,omitempty"`
+	err   error
+}
+
+// Err renvoie l'erreur du déplacement (nil si réussi).
+func (r MoveResult) Err() error { return r.err }
+
+// MoveMany déplace plusieurs fichiers ou dossiers dans le dossier dir en
+// conservant leur nom. Chaque élément est traité indépendamment : un échec
+// (destination existante, dossier déplacé dans lui-même...) n'interrompt pas
+// les autres. Les éléments déjà présents dans dir sont ignorés.
+func (s *Store) MoveMany(paths []string, dir string) ([]MoveResult, error) {
+	cd, ad, err := s.resolve(dir)
+	if err != nil {
+		return nil, err
+	}
+	fi, err := os.Stat(ad)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	if !fi.IsDir() {
+		return nil, fmt.Errorf("%w : la destination n'est pas un dossier", ErrInvalidPath)
+	}
+	out := make([]MoveResult, 0, len(paths))
+	for _, p := range paths {
+		r := MoveResult{From: p}
+		if c, err := Clean(p); err != nil || c == "" {
+			r.err = ErrInvalidPath
+		} else if strings.TrimPrefix(path.Dir("/"+c), "/") == cd {
+			r.From, r.To = c, c // déjà dans le dossier cible
+		} else {
+			r.From = c
+			var e Entry
+			if e, r.err = s.Move(c, path.Join(cd, path.Base(c))); r.err == nil {
+				r.To = e.Path
+			}
+		}
+		if r.err != nil {
+			r.Error = r.err.Error()
+		}
+		out = append(out, r)
+	}
+	return out, nil
 }
 
 // Copy duplique un schéma (les dossiers ne sont pas copiés).
@@ -372,6 +423,9 @@ func (s *Store) Copy(from, to string) (Entry, error) {
 		return Entry{}, err
 	}
 	e, _, err := s.Write(to, data, "", true)
+	if err == nil {
+		s.copyThumb(from, e.Path)
+	}
 	return e, err
 }
 
@@ -402,7 +456,11 @@ func (s *Store) Delete(rel string, recursive bool) error {
 	if err := os.MkdirAll(trash, 0o755); err != nil {
 		return err
 	}
-	return os.Rename(abs, filepath.Join(trash, filepath.Base(abs)))
+	if err := os.Rename(abs, filepath.Join(trash, filepath.Base(abs))); err != nil {
+		return err
+	}
+	s.removeThumb(c, fi.IsDir())
+	return nil
 }
 
 // ReadLibrary renvoie la bibliothèque Excalidraw partagée (ou nil si absente).
