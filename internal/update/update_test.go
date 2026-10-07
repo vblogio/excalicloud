@@ -10,11 +10,11 @@ import (
 
 func TestCheck(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/@excalidraw/excalidraw/latest" {
+		if r.URL.Path != "/-/package/@excalidraw/excalidraw/dist-tags" {
 			http.NotFound(w, r)
 			return
 		}
-		_, _ = w.Write([]byte(`{"name":"@excalidraw/excalidraw","version":"0.19.0"}`))
+		_, _ = w.Write([]byte(`{"latest":"0.19.0","next":"0.19.0-abc1234","rc":"0.19.0-rc.1"}`))
 	}))
 	defer srv.Close()
 
@@ -23,8 +23,12 @@ func TestCheck(t *testing.T) {
 		t.Fatalf("avant vérification : %+v", s)
 	}
 	c.check(context.Background())
-	if s := c.Status(); s.Latest != "0.19.0" || s.CheckedAt == nil {
+	s := c.Status()
+	if s.Latest != "0.19.0" || s.Tags["next"] != "0.19.0-abc1234" || s.CheckedAt == nil {
 		t.Fatalf("après vérification : %+v", s)
+	}
+	if _, ok := s.Tags["rc"]; ok {
+		t.Fatalf("canal non proposé exposé : %+v", s.Tags)
 	}
 }
 
@@ -35,7 +39,7 @@ func TestCheckKeepsLastValueOnError(t *testing.T) {
 			http.Error(w, "panne", http.StatusBadGateway)
 			return
 		}
-		_, _ = w.Write([]byte(`{"version":"0.18.2"}`))
+		_, _ = w.Write([]byte(`{"latest":"0.18.2"}`))
 	}))
 	defer srv.Close()
 

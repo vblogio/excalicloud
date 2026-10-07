@@ -21,7 +21,7 @@ func encodePNG(t *testing.T, img image.Image) []byte {
 
 func TestTitle(t *testing.T) {
 	s := newStore(t)
-	if st, err := s.ReadSettings(); err != nil || st != (Settings{}) {
+	if st, err := s.ReadSettings(); err != nil || st != (Settings{Channel: DefaultChannel}) {
 		t.Fatalf("défauts : %+v, %v", st, err)
 	}
 	st, err := s.WriteTitle("  Schémas vLab  ")
@@ -39,6 +39,27 @@ func TestTitle(t *testing.T) {
 	// Les fichiers de réglages n'apparaissent pas dans l'explorateur.
 	if entries, _ := s.List(""); len(entries) != 0 {
 		t.Fatalf("réglages visibles : %+v", entries)
+	}
+}
+
+func TestChannel(t *testing.T) {
+	s := newStore(t)
+	if _, err := s.WriteTitle("Titre"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := s.WriteChannel("next")
+	if err != nil || st.Channel != "next" || st.Title != "Titre" {
+		t.Fatalf("canal : %+v, %v", st, err)
+	}
+	// Changer le titre conserve le canal, et inversement.
+	if st, _ := s.WriteTitle("Autre"); st.Channel != "next" {
+		t.Fatalf("canal perdu : %+v", st)
+	}
+	if _, err := s.WriteChannel("rc"); !errors.Is(err, ErrInvalidPath) {
+		t.Fatalf("canal invalide accepté : %v", err)
+	}
+	if st, _ := s.ReadSettings(); st.Channel != "next" || st.Title != "Autre" {
+		t.Fatalf("relu : %+v", st)
 	}
 }
 

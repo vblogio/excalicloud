@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -50,6 +51,8 @@ type Entry struct {
 // Store est un dépôt de schémas enraciné dans un répertoire.
 type Store struct {
 	root string
+
+	settingsMu sync.Mutex // sérialise les lectures-modifications de .settings.json
 }
 
 // New crée le répertoire racine si besoin et renvoie un Store.

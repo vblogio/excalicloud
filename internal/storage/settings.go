@@ -14,10 +14,12 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/vblogio/excalidraw-go/internal/update"
 )
 
-// Personnalisation de l'interface (titre, logo), partagée par tous les
-// navigateurs : .settings.json et .logo.png à la racine.
+// Paramètres de l'interface (titre, logo, canal d'Excalidraw), partagés par
+// tous les navigateurs : .settings.json et .logo.png à la racine.
 
 const (
 	settingsFile = ".settings.json"
@@ -36,35 +38,81 @@ const (
 // ErrInvalidImage signale un logo illisible ou hors limites.
 var ErrInvalidImage = errors.New("image invalide")
 
+// DefaultChannel est le canal npm d'Excalidraw suivi par défaut (versions stables).
+const DefaultChannel = "latest"
+
 // Settings est l'état exposé au client. Logo vaut "" sans logo, sinon une
 // version (date) à ajouter à l'URL pour invalider le cache navigateur.
+// Channel est le canal npm d'Excalidraw (latest ou next) dont l'interface
+// signale les nouvelles versions.
 type Settings struct {
-	Title string `json:"title"`
-	Logo  string `json:"logo"`
+	Title   string `json:"title"`
+	Logo    string `json:"logo"`
+	Channel string `json:"channel"`
 }
 
 type settingsDisk struct {
-	Title string `json:"title"`
+	Title   string `json:"title"`
+	Channel string `json:"channel,omitempty"`
 }
 
-// ReadSettings renvoie la personnalisation courante (valeurs vides par défaut).
-func (s *Store) ReadSettings() (Settings, error) {
+func (s *Store) readSettingsDisk() (settingsDisk, error) {
 	var d settingsDisk
 	b, err := os.ReadFile(filepath.Join(s.root, settingsFile))
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
-		return Settings{}, err
+		return d, err
 	default:
 		if err := json.Unmarshal(b, &d); err != nil {
-			return Settings{}, fmt.Errorf("%s : %w", settingsFile, err)
+			return d, fmt.Errorf("%s : %w", settingsFile, err)
 		}
 	}
-	st := Settings{Title: d.Title}
+	return d, nil
+}
+
+// updateSettings applique edit au fichier de paramètres (lecture, modification,
+// écriture atomique) sous le verrou du Store.
+func (s *Store) updateSettings(edit func(*settingsDisk)) (Settings, error) {
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	d, err := s.readSettingsDisk()
+	if err != nil {
+		return Settings{}, err
+	}
+	edit(&d)
+	b, err := json.Marshal(d)
+	if err != nil {
+		return Settings{}, err
+	}
+	if err := atomicWrite(filepath.Join(s.root, settingsFile), b); err != nil {
+		return Settings{}, err
+	}
+	return s.ReadSettings()
+}
+
+// ReadSettings renvoie les paramètres courants (valeurs par défaut si absents).
+func (s *Store) ReadSettings() (Settings, error) {
+	d, err := s.readSettingsDisk()
+	if err != nil {
+		return Settings{}, err
+	}
+	st := Settings{Title: d.Title, Channel: d.Channel}
+	if !update.ValidChannel(st.Channel) {
+		st.Channel = DefaultChannel
+	}
 	if fi, err := os.Stat(filepath.Join(s.root, logoFile)); err == nil {
 		st.Logo = strconv.FormatInt(fi.ModTime().UnixNano(), 36)
 	}
 	return st, nil
+}
+
+// WriteChannel enregistre le canal npm d'Excalidraw suivi (latest ou next).
+func (s *Store) WriteChannel(channel string) (Settings, error) {
+	if !update.ValidChannel(channel) {
+		return Settings{}, fmt.Errorf("%w : canal %q (latest ou next)", ErrInvalidPath, channel)
+	}
+	return s.updateSettings(func(d *settingsDisk) { d.Channel = channel })
 }
 
 // WriteTitle enregistre le titre affiché ("" = titre par défaut).
@@ -76,14 +124,7 @@ func (s *Store) WriteTitle(title string) (Settings, error) {
 	if utf8.RuneCountInString(title) > MaxTitleLen {
 		return Settings{}, fmt.Errorf("%w : titre de %d caractères max", ErrInvalidPath, MaxTitleLen)
 	}
-	b, err := json.Marshal(settingsDisk{Title: title})
-	if err != nil {
-		return Settings{}, err
-	}
-	if err := atomicWrite(filepath.Join(s.root, settingsFile), b); err != nil {
-		return Settings{}, err
-	}
-	return s.ReadSettings()
+	return s.updateSettings(func(d *settingsDisk) { d.Title = title })
 }
 
 // ReadLogo renvoie le logo PNG 64x64, ou ErrNotFound.

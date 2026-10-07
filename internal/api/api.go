@@ -11,7 +11,7 @@
 //	DELETE /api/entry?path=x[&recursive=true]     mise à la corbeille
 //	GET    /api/thumb?path=x  /  PUT (image/png)   miniature d'un schéma
 //	GET    /api/library  /  PUT /api/library      bibliothèque Excalidraw
-//	GET    /api/settings / PUT {"title":"..."}    personnalisation (titre, logo)
+//	GET    /api/settings / PUT {"title","channel"} paramètres (titre, logo, canal)
 //	GET    /api/logo  /  PUT (image/png)  /  DELETE   logo 64x64
 //	GET    /api/update                    dernière version d'Excalidraw sur npm
 package api
@@ -303,8 +303,10 @@ func (h *Handler) readSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, st)
 }
 
+// settingsReq : seuls les champs présents sont modifiés.
 type settingsReq struct {
-	Title string `json:"title"`
+	Title   *string `json:"title"`
+	Channel *string `json:"channel"`
 }
 
 func (h *Handler) writeSettings(w http.ResponseWriter, r *http.Request) {
@@ -312,7 +314,13 @@ func (h *Handler) writeSettings(w http.ResponseWriter, r *http.Request) {
 	if !h.decode(w, r, &req) {
 		return
 	}
-	st, err := h.Store.WriteTitle(req.Title)
+	st, err := h.Store.ReadSettings()
+	if err == nil && req.Title != nil {
+		st, err = h.Store.WriteTitle(*req.Title)
+	}
+	if err == nil && req.Channel != nil {
+		st, err = h.Store.WriteChannel(*req.Channel)
+	}
 	if err != nil {
 		fail(w, err)
 		return
