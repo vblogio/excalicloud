@@ -467,7 +467,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted }: Pr
       {selected.size > 0 && (
         <div className="selbar">
           <button className="icon-btn" onClick={clearSelection} aria-label="Annuler la sélection" title="Annuler la sélection (Échap)">
-            ✕
+            <CloseIcon />
           </button>
           <span className="count">{plural(selected.size, "sélectionné")}</span>
           <button
@@ -476,11 +476,14 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted }: Pr
             title={selected.size === list.length ? "Tout désélectionner" : "Tout sélectionner (Ctrl+A)"}
             aria-label={selected.size === list.length ? "Tout désélectionner" : "Tout sélectionner"}
           >
-            {selected.size === list.length ? "☐" : "☑"}
+            {selected.size === list.length ? <DeselectIcon /> : <SelectAllIcon />}
           </button>
-          <button onClick={() => setMoving([...selected])}>Déplacer…</button>
-          <button className="danger" onClick={() => removeMany([...selected])} title="Mettre à la corbeille (Suppr)" aria-label="Supprimer">
-            🗑
+          <button className="ex-btn" onClick={() => setMoving([...selected])}>
+            <MoveIcon />
+            <span>Déplacer…</span>
+          </button>
+          <button className="icon-btn danger" onClick={() => removeMany([...selected])} title="Mettre à la corbeille (Suppr)" aria-label="Supprimer">
+            <TrashIcon />
           </button>
         </div>
       )}
