@@ -97,6 +97,42 @@ button:disabled {
 .app.drawer-open {
   grid-template-columns: var(--drawer-w) 1fr;
 }
+.app.resizing {
+  transition: none;
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* Poignée de redimensionnement, à cheval sur la bordure de l'explorateur. */
+.splitter {
+  display: none;
+  grid-area: 2 / 1;
+  justify-self: end;
+  position: relative;
+  z-index: 5;
+  width: 9px;
+  margin-right: -5px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.drawer-open .splitter {
+  display: block;
+}
+.splitter::after {
+  content: "";
+  position: absolute;
+  inset: 0 3px;
+  border-radius: 2px;
+  transition: background 0.1s;
+}
+.splitter:hover::after,
+.splitter:focus-visible::after,
+.resizing .splitter::after {
+  background: var(--accent);
+}
+.splitter:focus-visible {
+  outline: none;
+}
 
 .topbar {
   grid-column: 1 / -1;
@@ -111,10 +147,67 @@ button:disabled {
 }
 .topbar .title {
   flex: 1;
+  min-width: 0;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.topbar .title .sep {
+  margin-right: 8px;
+  font-weight: 400;
+}
+
+/* Logo + titre personnalisés (clic : dialogue « Personnaliser »). */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 40%;
+  flex: none;
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  font-weight: 600;
+}
+.brand-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Logo stocké en 64x64 : affiché plus petit, il reste net sur écran HiDPI. */
+.logo {
+  --logo-size: 34px;
+  flex: none;
+  width: var(--logo-size);
+  height: var(--logo-size);
+  border-radius: 50%; /* masque rond */
+  object-fit: cover;
+  background: var(--bg);
+  box-shadow: 0 0 0 1px var(--border);
+}
+.logo.big {
+  --logo-size: 64px;
+}
+.topbar-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding-left: 4px;
+  border-left: 1px solid var(--border);
+}
+.topbar-tools .icon-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 6px;
+}
+.topbar-tools .icon-btn:hover {
+  background: var(--bg);
 }
 .status {
   font-size: 12px;
@@ -147,6 +240,7 @@ button:disabled {
 .canvas {
   grid-area: 2 / 2;
   position: relative;
+  isolation: isolate; /* la poignée passe au-dessus de l'interface Excalidraw */
   min-width: 0;
   min-height: 0;
 }
@@ -276,7 +370,7 @@ li.active > .row {
     top: var(--topbar-h);
     bottom: 0;
     left: 0;
-    width: min(var(--drawer-w), 88vw);
+    width: min(330px, 88vw); /* largeur réglable : bureau uniquement */
     transform: translateX(-100%);
     transition: transform 0.2s ease;
     box-shadow: 2px 0 12px rgb(0 0 0 / 0.2);
@@ -296,7 +390,12 @@ li.active > .row {
     background: rgb(0 0 0 / 0.35);
   }
   .row .meta,
-  .topbar .status {
+  .topbar .status,
+  .has-scene .brand-title {
+    display: none;
+  }
+  .splitter,
+  .drawer-open .splitter {
     display: none;
   }
   .row .name {
@@ -553,4 +652,34 @@ button.primary {
   display: flex;
   gap: 6px;
   align-items: center;
+}
+
+/* Dialogue « Personnaliser » */
+.customize .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.customize .field > span {
+  font-weight: 600;
+}
+.logo-edit {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.placeholder-logo {
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+}
+.logo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.logo-actions small {
+  flex-basis: 100%;
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import {
   Excalidraw,
   hashElementsVersion,
@@ -14,8 +14,11 @@ import type {
   LibraryItems,
 } from "@excalidraw/excalidraw/types";
 import type { OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
-import { api, ApiError, basename, stripExt } from "./api";
+import { api, ApiError, basename, stripExt, type Settings } from "./api";
+import { CustomizeDialog, DEFAULT_TITLE } from "./CustomizeDialog";
 import { Explorer } from "./Explorer";
+import { MoonIcon, SettingsIcon, SunIcon } from "./icons";
+import { Splitter } from "./Splitter";
 import { storeThumb } from "./thumbs";
 
 type Theme = "light" | "dark";
@@ -31,15 +34,33 @@ const AUTOSAVE_MS = 1500;
 const isMobile = () => window.matchMedia("(max-width: 768px)").matches;
 const pathFromHash = () => decodeURIComponent(location.hash.replace(/^#\/?/, "")) || null;
 
-const initialTheme = (): Theme => {
+const load = (key: string) => {
   try {
-    const t = localStorage.getItem("theme");
-    if (t === "light" || t === "dark") return t;
+    return localStorage.getItem(key);
+  } catch {
+    return null; // stockage indisponible
+  }
+};
+const store = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
   } catch {
     /* stockage indisponible */
   }
+};
+
+const initialTheme = (): Theme => {
+  const t = load("theme");
+  if (t === "light" || t === "dark") return t;
   return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 };
+
+// Largeur de l'explorateur (bureau) : réglable par la poignée, mémorisée par navigateur.
+const DRAWER_DEFAULT = 330;
+const DRAWER_MIN = 220;
+const drawerMax = () => Math.max(DRAWER_MIN, window.innerWidth - 360); // garde un canevas utilisable
+const clampDrawer = (w: number) => Math.round(Math.min(Math.max(w, DRAWER_MIN), drawerMax()));
+const initialDrawerWidth = () => clampDrawer(Number(load("drawerWidth")) || DRAWER_DEFAULT);
 
 /** Empreinte du contenu « persistant » (hors scroll, sélection, zoom...). */
 const sceneVersion = (
@@ -63,6 +84,10 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState(() => !isMobile());
   const [refreshKey, setRefreshKey] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [drawerWidth, setDrawerWidth] = useState(initialDrawerWidth);
+  const [resizing, setResizing] = useState(false);
+  const [settings, setSettings] = useState<Settings>({ title: "", logo: "" });
+  const [customizing, setCustomizing] = useState(false);
 
   const excalidraw = useRef<ExcalidrawImperativeAPI | null>(null);
   const pathRef = useRef<string | null>(null); // schéma ouvert (survit aux renommages)
@@ -73,6 +98,7 @@ export default function App() {
   const libTimer = useRef<number>(undefined);
   const libJson = useRef(""); // dernier état connu côté serveur
   const sceneSeq = useRef(0);
+  const exTheme = useRef<string | null>(null); // dernier thème signalé par Excalidraw
   const openRef = useRef<(path: string, opts?: { skipFlush?: boolean }) => Promise<void>>(async () => {});
 
   // --- Sauvegarde -----------------------------------------------------------
@@ -128,7 +154,13 @@ export default function App() {
 
   const onChange = useCallback(
     (elements: readonly OrderedExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
-      if (appState.theme !== theme) setTheme(appState.theme as Theme);
+      // Bascule depuis le menu d'Excalidraw. On ne réagit qu'à un changement
+      // signalé par Excalidraw : sinon, après un clic sur le bouton de la barre,
+      // un onChange portant encore l'ancien thème le rétablirait (boucle).
+      if (appState.theme !== exTheme.current) {
+        exTheme.current = appState.theme;
+        if (appState.theme !== theme) setTheme(appState.theme as Theme);
+      }
       if (!pathRef.current || appState.isLoading) return;
       const version = sceneVersion(elements, appState, files);
       // Premier onChange après chargement : c'est la version de référence.
@@ -251,12 +283,30 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    try {
-      localStorage.setItem("theme", theme);
-    } catch {
-      /* stockage indisponible */
-    }
+    store("theme", theme);
   }, [theme]);
+
+  // Largeur mémorisée en fin de glissement ; réajustée si la fenêtre rétrécit.
+  useEffect(() => {
+    if (!resizing) store("drawerWidth", String(drawerWidth));
+  }, [drawerWidth, resizing]);
+
+  useEffect(() => {
+    const onResize = () => setDrawerWidth((w) => clampDrawer(w));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Titre et logo personnalisés (partagés, stockés côté serveur).
+  useEffect(() => {
+    api.settings().then(setSettings).catch(console.error);
+  }, []);
+
+  const appTitle = settings.title || DEFAULT_TITLE;
+  const sceneName = scene ? stripExt(basename(scene.path)) : null;
+  useEffect(() => {
+    document.title = sceneName ? `${sceneName} – ${appTitle}` : appTitle;
+  }, [appTitle, sceneName]);
 
   // --- Synchronisation avec l'explorateur -----------------------------------
 
@@ -282,7 +332,10 @@ export default function App() {
   // --- Rendu -----------------------------------------------------------------
 
   return (
-    <div className={`app ${drawerOpen ? "drawer-open" : ""}`}>
+    <div
+      className={`app ${drawerOpen ? "drawer-open" : ""} ${resizing ? "resizing" : ""} ${scene ? "has-scene" : ""}`}
+      style={{ "--drawer-w": `${drawerWidth}px` } as CSSProperties}
+    >
       <header className="topbar">
         <button
           className="icon-btn"
@@ -291,9 +344,20 @@ export default function App() {
         >
           ☰
         </button>
-        <span className="title" title={scene?.path}>
-          {scene ? stripExt(basename(scene.path)) : "Excalidraw"}
-        </span>
+        <button className="brand" title="Personnaliser le titre et le logo" onClick={() => setCustomizing(true)}>
+          {settings.logo && <img className="logo" src={api.logoUrl(settings.logo)} alt="" />}
+          <span className="brand-title">{appTitle}</span>
+        </button>
+        {scene ? (
+          <span className="title" title={scene.path}>
+            <span className="sep muted" aria-hidden>
+              /
+            </span>
+            {sceneName}
+          </span>
+        ) : (
+          <span className="spacer" />
+        )}
         {scene && (
           <>
             <span className={`status ${saveState}`}>{SAVE_LABEL[saveState]}</span>
@@ -305,6 +369,24 @@ export default function App() {
             </button>
           </>
         )}
+        <div className="topbar-tools">
+          <button
+            className="icon-btn"
+            aria-label={theme === "dark" ? "Passer en mode clair" : "Passer en mode sombre"}
+            title={theme === "dark" ? "Mode clair" : "Mode sombre"}
+            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+          >
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </button>
+          <button
+            className="icon-btn"
+            aria-label="Personnaliser le titre et le logo"
+            title="Personnaliser"
+            onClick={() => setCustomizing(true)}
+          >
+            <SettingsIcon />
+          </button>
+        </div>
       </header>
 
       <aside className="drawer">
@@ -316,6 +398,14 @@ export default function App() {
           onDeleted={onDeleted}
         />
       </aside>
+      <Splitter
+        width={drawerWidth}
+        min={DRAWER_MIN}
+        max={drawerMax()}
+        onResize={(w) => setDrawerWidth(clampDrawer(w))}
+        onDragging={setResizing}
+        onReset={() => setDrawerWidth(clampDrawer(DRAWER_DEFAULT))}
+      />
       <div className="backdrop" onClick={() => setDrawerOpen(false)} />
 
       <main className="canvas">
@@ -341,6 +431,10 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {customizing && (
+        <CustomizeDialog settings={settings} onChange={setSettings} onClose={() => setCustomizing(false)} />
+      )}
     </div>
   );
 }

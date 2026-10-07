@@ -14,6 +14,12 @@ export interface MoveResult {
   error?: string;
 }
 
+/** Personnalisation partagée ; logo = "" sans logo, sinon sa version. */
+export interface Settings {
+  title: string;
+  logo: string;
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -87,6 +93,21 @@ export const api = {
       body,
     });
   },
+
+  settings: async (): Promise<Settings> => (await request("/api/settings")).json(),
+
+  setTitle: async (title: string): Promise<Settings> =>
+    (await request("/api/settings", { ...json({ title }), method: "PUT" })).json(),
+
+  /** Le serveur recadre au centre et ramène le PNG à 64x64. */
+  uploadLogo: async (png: Blob): Promise<Settings> =>
+    (
+      await request("/api/logo", { method: "PUT", headers: { "Content-Type": "image/png" }, body: png })
+    ).json(),
+
+  removeLogo: async (): Promise<Settings> => (await request("/api/logo", { method: "DELETE" })).json(),
+
+  logoUrl: (v: string) => `/api/logo?v=${q(v)}`,
 
   downloadUrl: (path: string) => `/api/file?path=${q(path)}`,
 

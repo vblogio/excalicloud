@@ -18,6 +18,7 @@ Navigateur ──HTTP──▶ conteneur excalidraw-go (:8080, uid 65532, rootfs
                        volume /data
                          ├─ projets/réseau/sdn.excalidraw   ← fichiers JSON Excalidraw standards
                          ├─ .library.excalidrawlib          ← bibliothèque partagée
+                         ├─ .settings.json, .logo.png       ← titre et logo de la barre
                          ├─ .thumbs/projets/réseau/sdn.excalidraw.png ← miniatures (régénérables)
                          └─ .trash/<horodatage>/...         ← éléments supprimés
 ```
@@ -52,6 +53,9 @@ Bind mount au lieu du volume nommé : `- ./data:/data` puis `chown -R 65532:6553
 - **Sauvegarde** : automatique 1,5 s après la dernière modification, immédiate avec `Ctrl/Cmd+S`. Le statut (Modifié / Enregistrement… / Enregistré) est affiché dans la barre du haut.
 - **Lien direct** : l'URL `http://hôte:8080/#/dossier/schema.excalidraw` ouvre le schéma.
 - **Bibliothèque** Excalidraw : persistée côté serveur, partagée entre tous les schémas.
+- **Largeur de l'explorateur** (bureau) : glisser la poignée entre l'explorateur et le canevas ; flèches ←/→ au clavier quand elle a le focus (Maj : pas plus grand), double-clic pour revenir à 330 px. Mémorisée par navigateur.
+- **Mode clair/sombre** : bouton ☀/☾ à droite de la barre du haut ; s'applique à l'interface et au canevas Excalidraw, reste synchronisé avec le choix du menu d'Excalidraw. Mémorisé par navigateur.
+- **Titre et logo** : bouton ✎ à droite de la barre (ou clic sur le titre). Le titre et le logo sont communs à tous les utilisateurs. Le logo (PNG, 5 Mo max) est recadré au centre, réduit à 64×64 px côté serveur et affiché dans un masque rond (34 px dans la barre, net sur écran HiDPI ; taille réglable via `--logo-size` dans `styles.css`).
 
 ### Miniatures
 
@@ -84,6 +88,11 @@ Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants co
 | POST | `/api/copy` | `{"from":"…","to":"…"}` | `Entry` |
 | DELETE | `/api/entry?path=x[&recursive=true]` | | `204` (déplacé dans `.trash/`) |
 | GET/PUT | `/api/library` | bibliothèque `excalidrawlib` | |
+| GET | `/api/settings` | | `{"title":"...","logo":"<version>"}` (`logo` vide sans logo) |
+| PUT | `/api/settings` | `{"title":"..."}` (80 caractères max, vide = titre par défaut) | réglages |
+| GET | `/api/logo?v=<version>` | | PNG 64×64 ; `404` sans logo |
+| PUT | `/api/logo` | PNG (5 Mo, 8192×8192 px max) | réglages ; image recadrée et ré-encodée |
+| DELETE | `/api/logo` | | réglages |
 | GET | `/healthz` | | `ok` (hors authentification) |
 
 `Entry` = `{"name","path","isDir","size","modTime"}`.
