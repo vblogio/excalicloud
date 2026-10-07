@@ -139,14 +139,23 @@ func snippet(d indexDoc, i, n int) string {
 	return pre + string(runes[lo:hi]) + post
 }
 
-// Search renvoie les entrées dont le nom ou, pour un schéma, le contenu
-// contient tous les mots de q (casse et accents ignorés). Les correspondances
-// sur le nom viennent en premier.
-func (s *Store) Search(q string, limit int) ([]Hit, error) {
+// Filter restreint une recherche aux éléments portant un tag ou favoris.
+type Filter struct {
+	Tag      string
+	Favorite bool
+}
+
+// Search renvoie les entrées dont le nom, les tags ou, pour un schéma, le
+// contenu contiennent tous les mots de q (casse et accents ignorés), et qui
+// passent le filtre. Les correspondances sur le nom viennent en premier.
+// q peut être vide si un filtre est donné.
+func (s *Store) Search(q string, f Filter, limit int) ([]Hit, error) {
 	terms := strings.Fields(fold(q))
-	if len(terms) == 0 {
+	tag := fold(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(f.Tag), "#")))
+	if len(terms) == 0 && tag == "" && !f.Favorite {
 		return []Hit{}, nil
 	}
+	meta := s.metaSnapshot()
 	s.index.mu.Lock()
 	defer s.index.mu.Unlock()
 	if s.index.docs == nil {
@@ -176,13 +185,23 @@ func (s *Store) Search(q string, limit int) ([]Hit, error) {
 			return nil
 		}
 		rel = filepath.ToSlash(rel)
-		name := fold(d.Name())
+		hit := Hit{Entry: toEntry(rel, fi)}
+		decorate(&hit.Entry, meta)
+		if f.Favorite && !hit.Favorite {
+			return nil
+		}
+		tags := fold(strings.Join(hit.Tags, "\n"))
+		if tag != "" && !strings.Contains("\n"+tags+"\n", "\n"+tag+"\n") {
+			return nil
+		}
+		name := fold(d.Name()) + "\n" + tags
 		var doc indexDoc
 		if !d.IsDir() {
 			seen[rel] = true
-			doc = s.content(rel, p, fi)
+			if len(terms) > 0 {
+				doc = s.content(rel, p, fi)
+			}
 		}
-		hit := Hit{Entry: toEntry(rel, fi)}
 		inName := true
 		for _, t := range terms {
 			if strings.Contains(name, t) {

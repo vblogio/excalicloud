@@ -21,7 +21,7 @@ func TestSearchContent(t *testing.T) {
 	s.Write("réplication.excalidraw", scene(`rien`), "", true)
 	s.Write("supprimé.excalidraw", []byte(`{"elements":[{"type":"text","text":"172.27.207.99","isDeleted":true}]}`), "", true)
 
-	hits, err := s.Search("172.27.207", 10)
+	hits, err := s.Search("172.27.207", Filter{}, 10)
 	if err != nil || len(hits) != 1 || hits[0].Path != "réseau/sdn.excalidraw" {
 		t.Fatalf("IP : %+v, %v", hits, err)
 	}
@@ -30,7 +30,7 @@ func TestSearchContent(t *testing.T) {
 	}
 
 	// Accents et casse ignorés ; le nom passe avant le contenu.
-	hits, _ = s.Search("REPLICATION", 10)
+	hits, _ = s.Search("REPLICATION", Filter{}, 10)
 	if len(hits) != 2 || hits[0].Path != "réplication.excalidraw" || hits[1].Path != "stockage/vsan.excalidraw" {
 		t.Fatalf("accents : %+v", hits)
 	}
@@ -39,24 +39,24 @@ func TestSearchContent(t *testing.T) {
 	}
 
 	// Tous les mots doivent correspondre, dans le nom ou le contenu.
-	if hits, _ := s.Search("sdn overlay", 10); len(hits) != 1 {
+	if hits, _ := s.Search("sdn overlay", Filter{}, 10); len(hits) != 1 {
 		t.Fatalf("nom + contenu : %+v", hits)
 	}
-	if hits, _ := s.Search("sdn vsan", 10); len(hits) != 0 {
+	if hits, _ := s.Search("sdn vsan", Filter{}, 10); len(hits) != 0 {
 		t.Fatalf("ET logique : %+v", hits)
 	}
 	// Les dossiers correspondent par leur nom.
-	if hits, _ := s.Search("stock", 10); len(hits) != 1 || !hits[0].IsDir {
+	if hits, _ := s.Search("stock", Filter{}, 10); len(hits) != 1 || !hits[0].IsDir {
 		t.Fatalf("dossier : %+v", hits)
 	}
 
 	// Une modification est prise en compte (date ou taille changée).
 	time.Sleep(5 * time.Millisecond)
 	s.Write("réseau/sdn.excalidraw", scene(`Edge NSX 10.0.0.1`), "", false)
-	if hits, _ := s.Search("172.27.207", 10); len(hits) != 0 {
+	if hits, _ := s.Search("172.27.207", Filter{}, 10); len(hits) != 0 {
 		t.Fatalf("index périmé : %+v", hits)
 	}
-	if hits, _ := s.Search("10.0.0", 10); len(hits) != 1 {
+	if hits, _ := s.Search("10.0.0", Filter{}, 10); len(hits) != 1 {
 		t.Fatalf("index non mis à jour : %+v", hits)
 	}
 }

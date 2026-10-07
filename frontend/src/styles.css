@@ -1140,3 +1140,90 @@ li.active > .row {
 .entries.grid .snippet {
   text-align: center;
 }
+
+/* --- Tags et favoris -------------------------------------------------------- */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  background: var(--ex-surface-low);
+  box-shadow: none;
+  font-size: 11.5px;
+  letter-spacing: normal;
+  white-space: nowrap;
+}
+button.chip.on,
+.chip.on {
+  background: var(--ex-primary);
+  color: var(--ex-surface-lowest);
+}
+.chip small {
+  opacity: 0.7;
+  font-size: 10.5px;
+}
+.filters {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  flex: none;
+  padding-bottom: 2px;
+}
+.row .fav {
+  display: inline-flex;
+  margin-right: 4px;
+  vertical-align: -1px;
+  color: #f59f00;
+}
+.row .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+/* En liste : tags sur une ligne sous le nom. */
+.entries.list .row {
+  flex-wrap: wrap;
+}
+.entries.list .row .tags {
+  order: 10;
+  flex-basis: 100%;
+  margin-top: -4px;
+  padding: 0 6px 5px 82px;
+}
+.row .tags .chip {
+  height: 18px;
+  padding: 0 6px;
+  font-size: 10.5px;
+}
+.entries.grid .row .tags {
+  justify-content: center;
+  padding: 0 4px 6px;
+}
+.tags-dialog .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+}
+.tags-dialog .chip {
+  height: 26px;
+  padding: 0 4px 0 10px;
+  border-radius: 13px;
+  font-size: 12.5px;
+}
+.tags-dialog .chip .icon-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 10px;
+}
+.tags-dialog .suggestions .chip {
+  padding: 0 10px;
+  color: var(--muted);
+}
+.tag-add {
+  display: flex;
+  gap: 6px;
+}

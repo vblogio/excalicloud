@@ -76,7 +76,7 @@ func TestListMoveDelete(t *testing.T) {
 	if _, err := s.Move("dir", "dir/sub"); !errors.Is(err, ErrInvalidPath) {
 		t.Fatalf("déplacement dans soi-même : %v", err)
 	}
-	if res, _ := s.Search("Y.EXCAL", 10); len(res) != 1 || res[0].Path != "dir/y.excalidraw" {
+	if res, _ := s.Search("Y.EXCAL", Filter{}, 10); len(res) != 1 || res[0].Path != "dir/y.excalidraw" {
 		t.Fatalf("Search = %+v", res)
 	}
 	if err := s.Delete("dir", false); !errors.Is(err, ErrNotEmpty) {

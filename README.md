@@ -1,6 +1,6 @@
 # excalidraw-go
 
-Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arborescence de dossiers, **vignettes des schémas**, création, renommage, **sélection et déplacement multiples** (glisser-déposer ou dialogue « Déplacer vers… »), duplication, suppression (corbeille), **recherche plein texte** (noms et contenu des schémas), import/export de fichiers `.excalidraw`, sauvegarde automatique côté serveur, **historique des versions** avec comparaison visuelle et restauration. Interface web unique, responsive (l'explorateur devient un tiroir sur mobile).
+Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arborescence de dossiers, **vignettes des schémas**, création, renommage, **sélection et déplacement multiples** (glisser-déposer ou dialogue « Déplacer vers… »), duplication, suppression (corbeille), **recherche plein texte** (noms et contenu des schémas), **tags et favoris**, import/export de fichiers `.excalidraw`, sauvegarde automatique côté serveur, **historique des versions** avec comparaison visuelle et restauration. Interface web unique, responsive (l'explorateur devient un tiroir sur mobile).
 
 - **Backend** : Go 1.24, bibliothèque standard uniquement (aucune dépendance externe), API REST/JSON, stockage en fichiers `.excalidraw` sur un volume.
 - **Frontend** : React 19 + composant officiel [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw) 0.18.1 (licence MIT), build Vite **embarqué dans le binaire Go** (`embed`).
@@ -20,6 +20,7 @@ Navigateur ──HTTP──▶ conteneur excalidraw-go (:8080, uid 65532, rootfs
                          ├─ .library.excalidrawlib          ← bibliothèque partagée
                          ├─ .settings.json, .logo.png       ← titre et logo de la barre
                          ├─ .thumbs/projets/réseau/sdn.excalidraw.png ← miniatures (régénérables)
+                         ├─ .meta.json                       ← tags et favoris
                          ├─ .history/projets/réseau/sdn.excalidraw/<date>.excalidraw ← versions
                          └─ .trash/<horodatage>/...         ← éléments supprimés
 ```
@@ -99,6 +100,12 @@ Le champ de recherche de l'explorateur cherche dans les noms de fichiers et de d
 
 L'index est tenu en mémoire par le serveur : le texte de chaque schéma est extrait à la première recherche, puis relu seulement si le fichier a changé (date ou taille), y compris pour les fichiers modifiés hors de l'application. Rien n'est écrit sur le volume.
 
+### Tags et favoris
+
+Menu « … » d'un élément (ou barre de sélection pour plusieurs) : **Favori** et **Tags…**. Les tags sont libres (40 caractères, 20 par élément, saisis séparés par des virgules), comparés sans casse ni accents ; un tag déjà utilisé garde son écriture d'origine (`nsx` devient `NSX` s'il existe). La ligne de filtres sous la recherche liste les tags utilisés avec leur nombre d'éléments : un clic sur un tag ou sur **Favoris** affiche les éléments correspondants de toute l'arborescence, combinables avec le texte recherché. Les tags participent aussi à la recherche texte.
+
+Stockage : `DATA_DIR/.meta.json` (`{"items":{"chemin":{"tags":[…],"favorite":true}}}`), mis à jour aux renommages, déplacements, copies (tags seuls) et suppressions.
+
 ### Historique des versions
 
 Avant qu'un schéma soit écrasé, son contenu précédent est copié dans `DATA_DIR/.history/<chemin du schéma>/<date>.excalidraw` (fichier Excalidraw complet, ouvrable tel quel). L'enregistrement automatique écrit toutes les 1,5 s pendant l'édition : une version n'est donc conservée que si la précédente date d'au moins `HISTORY_INTERVAL` (10 min par défaut), ce qui donne une version par séance de travail ou par tranche de 10 minutes. Les `HISTORY_KEEP` plus récentes sont gardées, et `HISTORY_MAX_AGE` purge les plus anciennes.
@@ -124,7 +131,10 @@ Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants co
 | Méthode | Route | Corps / paramètres | Réponse |
 |---|---|---|---|
 | GET | `/api/list?path=dir` | | `[Entry]` (dossiers puis schémas) |
-| GET | `/api/search?q=texte` | | `[Entry + "snippet"]` (200 max) : noms puis contenu, tous les mots requis |
+| GET | `/api/search?q=texte[&tag=t][&fav=true]` | | `[Entry + "snippet"]` (200 max) : noms et tags puis contenu, tous les mots requis ; `q` facultatif avec un filtre |
+| GET | `/api/tags` | | `[{"name","count"}]` |
+| POST | `/api/meta/favorite` | `{"paths":[…],"favorite":true}` | `204` |
+| POST | `/api/meta/tags` | `{"paths":[…],"add":["NSX"],"remove":["old"]}` | `204` |
 | GET | `/api/file?path=x.excalidraw` | | JSON du schéma + `ETag` |
 | PUT | `/api/file?path=x.excalidraw` | JSON ; `If-Match: <etag>` ou `If-None-Match: *` (création) | `Entry` + `ETag` ; `409` existe, `412` conflit |
 | POST | `/api/folder` | `{"path":"a/b"}` | `Entry` |
@@ -147,7 +157,7 @@ Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants co
 | GET | `/api/update` | | `{"enabled","tags":{"latest","next"},"latest","checkedAt"}` |
 | GET | `/healthz` | | `ok` (hors authentification) |
 
-`Entry` = `{"name","path","isDir","size","modTime"}`.
+`Entry` = `{"name","path","isDir","size","modTime","tags","favorite"}` (les deux derniers omis s'ils sont vides).
 
 Exemple d'automatisation (génération de schémas par script) :
 
@@ -182,6 +192,7 @@ frontend/src/MoveDialog.tsx sélecteur de dossier « Déplacer vers… »
 frontend/src/Thumb.tsx      vignette chargée à l'affichage, générée si absente
 frontend/src/thumbs.ts      rendu PNG des miniatures et file de génération
 frontend/src/HistoryDialog.tsx historique : aperçu, différences, restauration
+frontend/src/TagsDialog.tsx tags d'un ou plusieurs éléments
 ```
 
 ## Sécurité

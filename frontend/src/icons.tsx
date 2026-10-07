@@ -163,3 +163,23 @@ export const DownloadIcon = icon(
     <path d="M7 11l5 5 5-5M12 4v12" />
   </>,
 );
+
+export const StarIcon = icon(
+  <path d="M12 17.75l-6.17 3.24 1.18-6.87-5-4.86 6.9-1 3.09-6.26 3.09 6.26 6.9 1-5 4.86 1.18 6.87z" />,
+);
+
+/** Étoile pleine (favori). */
+export function StarFilledIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" aria-hidden>
+      <path d="M12 17.75l-6.17 3.24 1.18-6.87-5-4.86 6.9-1 3.09-6.26 3.09 6.26 6.9 1-5 4.86 1.18 6.87z" />
+    </svg>
+  );
+}
+
+export const TagIcon = icon(
+  <>
+    <circle cx="8.5" cy="8.5" r="1" />
+    <path d="M4 7v3.86a2 2 0 0 0 .59 1.41l7.71 7.71a2.4 2.4 0 0 0 3.4 0l4.27-4.27a2.4 2.4 0 0 0 0-3.4L12.26 4.59A2 2 0 0 0 10.85 4H7a3 3 0 0 0-3 3z" />
+  </>,
+);

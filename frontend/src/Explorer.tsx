@@ -11,6 +11,7 @@ import {
   withExt,
   type Entry,
   type Hit,
+  type TagCount,
 } from "./api";
 import {
   CloseIcon,
@@ -26,12 +27,16 @@ import {
   RefreshIcon,
   SearchIcon,
   SelectAllIcon,
+  StarFilledIcon,
+  StarIcon,
+  TagIcon,
   TrashIcon,
   UpIcon,
   UploadIcon,
 } from "./icons";
 import { collectDrop, collectFiles, hasFiles, type Collected } from "./importer";
 import { MoveDialog } from "./MoveDialog";
+import { TagsDialog } from "./TagsDialog";
 import { Thumb } from "./Thumb";
 
 export const EMPTY_SCENE = JSON.stringify({
@@ -96,10 +101,16 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   const [notice, setNotice] = useState<{ text: string; detail?: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null); // progression d'un import
   const [fileDrag, setFileDrag] = useState(false); // fichiers du système survolant l'explorateur
+  const [tags, setTags] = useState<TagCount[]>([]);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [favOnly, setFavOnly] = useState(false);
+  const [tagging, setTagging] = useState<Entry[] | null>(null); // éléments du dialogue « Tags »
   const fileInput = useRef<HTMLInputElement>(null);
   const dirInput = useRef<HTMLInputElement>(null);
 
   const list = results ?? entries;
+  const filter = { tag: tagFilter, fav: favOnly };
+  const filtering = query.trim() !== "" || tagFilter !== null || favOnly;
 
   const guard = useCallback(async (fn: () => Promise<unknown>) => {
     setError(null);
@@ -113,8 +124,11 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   const refresh = useCallback(
     () =>
       guard(async () => {
-        const next = await api.list(dir);
+        const [next, tagList] = await Promise.all([api.list(dir), api.tags()]);
         setEntries(next);
+        setTags(tagList);
+        // Tag filtré qui n'existe plus : filtre retiré.
+        setTagFilter((t) => (t && tagList.some((x) => x.name === t) ? t : null));
         setMenuFor(null);
         // Oublie les éléments sélectionnés qui ont disparu.
         setSelected((s) => {
@@ -141,15 +155,22 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
     if (current) setDir(dirname(current));
   }, [current]);
 
-  // Recherche avec anti-rebond.
+  // Recherche (texte, tag, favoris) avec anti-rebond.
   useEffect(() => {
-    if (!query.trim()) {
+    if (!filtering) {
       setResults(null);
       return;
     }
-    const t = setTimeout(() => guard(async () => setResults(await api.search(query))), 250);
+    const t = setTimeout(() => guard(async () => setResults(await api.search(query, filter))), 250);
     return () => clearTimeout(t);
-  }, [query, guard, refreshKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, tagFilter, favOnly, guard, refreshKey]);
+
+  /** Recharge le dossier et, si une recherche est affichée, ses résultats. */
+  const reload = async () => {
+    await refresh();
+    if (filtering) setResults(await api.search(query, filter));
+  };
 
   useEffect(() => {
     try {
@@ -254,11 +275,22 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
       }
       clearSelection();
       setMoving(null);
-      await refresh();
-      if (results) setResults(await api.search(query));
+      await reload();
       if (failed.length) {
         setError(`${plural(failed.length, "élément")} non déplacé${failed.length > 1 ? "s" : ""} — ${failed.join(" ; ")}`);
       }
+    });
+
+  /** Favoris : la sélection devient favorite, sauf si elle l'est déjà entièrement. */
+  const toggleFavorite = (items: Entry[]) =>
+    guard(async () => {
+      const fav = !items.every((e) => e.favorite);
+      await api.setFavorite(
+        items.map((e) => e.path),
+        fav,
+      );
+      setMenuFor(null);
+      await reload();
     });
 
   const duplicate = (e: Entry) =>
@@ -291,8 +323,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
         onDeleted(p);
       }
       clearSelection();
-      await refresh();
-      if (results) setResults(await api.search(query));
+      await reload();
     });
 
   /**
@@ -425,6 +456,14 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
       <button onClick={() => setMoving([e.path])}>Déplacer…</button>
       {!e.isDir && <button onClick={() => duplicate(e)}>Dupliquer</button>}
       {!e.isDir && <button onClick={() => onHistory(e.path)}>Historique…</button>}
+      <button onClick={() => toggleFavorite([e])}>
+        {e.favorite ? <StarFilledIcon /> : <StarIcon />}
+        {e.favorite ? "Retirer des favoris" : "Favori"}
+      </button>
+      <button onClick={() => setTagging([e])}>
+        <TagIcon />
+        Tags…
+      </button>
       {!e.isDir && (
         <a href={api.downloadUrl(e.path)} download={e.name}>
           Télécharger
@@ -471,11 +510,30 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
           <button className="name" onClick={(ev) => onItemClick(ev, e)} title={e.path}>
             {icon(e)}
             <span className="label">
+              {e.favorite && (
+                <span className="fav" title="Favori">
+                  <StarFilledIcon size={12} />
+                </span>
+              )}
               {e.isDir ? e.name : stripExt(e.name)}
               {results && <small className="muted where"> {dirname(e.path) || "/"}</small>}
               {e.snippet && <small className="snippet">{e.snippet}</small>}
             </span>
           </button>
+          {!!e.tags?.length && (
+            <span className="tags">
+              {e.tags.map((t) => (
+                <button
+                  key={t}
+                  className={`chip ${t === tagFilter ? "on" : ""}`}
+                  title={`Filtrer sur « ${t} »`}
+                  onClick={() => setTagFilter(t === tagFilter ? null : t)}
+                >
+                  {t}
+                </button>
+              ))}
+            </span>
+          )}
           {!e.isDir && view === "list" && <span className="meta muted">{fmtDate(e.modTime)}</span>}
           <button
             className="icon-btn more"
@@ -583,6 +641,30 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
         </button>
       </div>
 
+      <div className="filters" role="group" aria-label="Filtres">
+        <button
+          className={`chip ${favOnly ? "on" : ""}`}
+          aria-pressed={favOnly}
+          onClick={() => setFavOnly((f) => !f)}
+          title="Favoris de toute l'arborescence"
+        >
+          {favOnly ? <StarFilledIcon size={12} /> : <StarIcon size={12} />}
+          Favoris
+        </button>
+        {tags.map((t) => (
+          <button
+            key={t.name}
+            className={`chip ${t.name === tagFilter ? "on" : ""}`}
+            aria-pressed={t.name === tagFilter}
+            onClick={() => setTagFilter(t.name === tagFilter ? null : t.name)}
+            title={`${plural(t.count, "élément")} avec ce tag`}
+          >
+            {t.name}
+            <small>{t.count}</small>
+          </button>
+        ))}
+      </div>
+
       {!results && (
         <nav className="crumbs">
           <button className={dropTarget === "" ? "drop" : ""} onClick={() => setDir("")} {...dropProps("")}>
@@ -615,6 +697,22 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
             aria-label={selected.size === list.length ? "Tout désélectionner" : "Tout sélectionner"}
           >
             {selected.size === list.length ? <DeselectIcon /> : <SelectAllIcon />}
+          </button>
+          <button
+            className="icon-btn"
+            onClick={() => toggleFavorite(list.filter((e) => selected.has(e.path)))}
+            title="Favoris (ajouter ou retirer)"
+            aria-label="Favoris"
+          >
+            <StarIcon />
+          </button>
+          <button
+            className="icon-btn"
+            onClick={() => setTagging(list.filter((e) => selected.has(e.path)))}
+            title="Tags…"
+            aria-label="Tags"
+          >
+            <TagIcon />
           </button>
           <button className="ex-btn" onClick={() => setMoving([...selected])}>
             <MoveIcon />
@@ -661,6 +759,15 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
           <span>Déposer pour importer dans « {importDir ? basename(importDir) : "Racine"} »</span>
           <small>Les dossiers sont recréés · seuls les .excalidraw sont importés</small>
         </div>
+      )}
+
+      {tagging && (
+        <TagsDialog
+          items={tagging.map((t) => list.find((e) => e.path === t.path) ?? t)}
+          known={tags}
+          onChanged={reload}
+          onClose={() => setTagging(null)}
+        />
       )}
 
       {moving && (

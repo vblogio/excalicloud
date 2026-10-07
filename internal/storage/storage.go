@@ -47,6 +47,9 @@ type Entry struct {
 	IsDir   bool      `json:"isDir"`
 	Size    int64     `json:"size"`
 	ModTime time.Time `json:"modTime"`
+
+	Tags     []string `json:"tags,omitempty"`
+	Favorite bool     `json:"favorite,omitempty"`
 }
 
 // Store est un dépôt de schémas enraciné dans un répertoire.
@@ -58,6 +61,9 @@ type Store struct {
 
 	settingsMu sync.Mutex // sérialise les lectures-modifications de .settings.json
 	index      textIndex  // texte des schémas pour la recherche (search.go)
+
+	metaMu sync.Mutex          // tags et favoris (meta.go)
+	meta   map[string]itemMeta // nil : pas encore chargé
 }
 
 // New crée le répertoire racine si besoin et renvoie un Store.
@@ -165,6 +171,7 @@ func (s *Store) List(rel string) ([]Entry, error) {
 		return nil, mapErr(err)
 	}
 	out := make([]Entry, 0, len(des))
+	meta := s.metaSnapshot()
 	for _, de := range des {
 		if !visible(de.Name(), de.IsDir()) || de.Type()&fs.ModeSymlink != 0 {
 			continue
@@ -173,7 +180,9 @@ func (s *Store) List(rel string) ([]Entry, error) {
 		if err != nil {
 			continue
 		}
-		out = append(out, toEntry(path.Join(c, de.Name()), fi))
+		e := toEntry(path.Join(c, de.Name()), fi)
+		decorate(&e, meta)
+		out = append(out, e)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].IsDir != out[j].IsDir {
@@ -335,6 +344,7 @@ func (s *Store) Move(from, to string) (Entry, error) {
 	}
 	s.moveThumb(cf, ct, fi.IsDir())
 	s.moveHistory(cf, ct)
+	s.moveMeta(cf, ct)
 	fi, err = os.Stat(at)
 	if err != nil {
 		return Entry{}, err
@@ -400,6 +410,9 @@ func (s *Store) Copy(from, to string) (Entry, error) {
 	e, _, err := s.Write(to, data, "", true)
 	if err == nil {
 		s.copyThumb(from, e.Path)
+		if cf, err := Clean(from); err == nil {
+			s.copyMeta(cf, e.Path)
+		}
 	}
 	return e, err
 }
@@ -436,6 +449,7 @@ func (s *Store) Delete(rel string, recursive bool) error {
 	}
 	s.removeThumb(c, fi.IsDir())
 	s.trashHistory(c, trash)
+	s.removeMeta(c)
 	return nil
 }
 

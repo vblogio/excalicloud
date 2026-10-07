@@ -1,7 +1,10 @@
 // Package api expose le Store en REST/JSON.
 //
 //	GET    /api/list?path=dir            contenu d'un dossier
-//	GET    /api/search?q=texte           recherche (noms et texte des schémas)
+//	GET    /api/search?q=texte[&tag=t][&fav=true] recherche (noms, tags, texte des schémas)
+//	GET    /api/tags                     tags utilisés et nombre d'éléments
+//	POST   /api/meta/favorite {"paths":[...],"favorite":true}  favoris
+//	POST   /api/meta/tags {"paths":[...],"add":[...],"remove":[...]} tags
 //	GET    /api/file?path=a/b.excalidraw lecture (ETag en en-tête)
 //	PUT    /api/file?path=a/b.excalidraw écriture (If-Match / If-None-Match: *)
 //	POST   /api/folder   {"path":"a/b"}           création de dossier
@@ -42,6 +45,9 @@ type Handler struct {
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/list", h.list)
 	mux.HandleFunc("GET /api/search", h.search)
+	mux.HandleFunc("GET /api/tags", h.tags)
+	mux.HandleFunc("POST /api/meta/favorite", h.setFavorite)
+	mux.HandleFunc("POST /api/meta/tags", h.editTags)
 	mux.HandleFunc("GET /api/file", h.readFile)
 	mux.HandleFunc("PUT /api/file", h.writeFile)
 	mux.HandleFunc("POST /api/folder", h.mkdir)
@@ -127,12 +133,67 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
-	entries, err := h.Store.Search(r.URL.Query().Get("q"), 200)
+	q := r.URL.Query()
+	f := storage.Filter{Tag: q.Get("tag"), Favorite: q.Get("fav") == "true"}
+	entries, err := h.Store.Search(q.Get("q"), f, 200)
 	if err != nil {
 		fail(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, entries)
+}
+
+func (h *Handler) tags(w http.ResponseWriter, r *http.Request) {
+	tags, err := h.Store.Tags()
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	writeJSON(w, http.StatusOK, tags)
+}
+
+type metaReq struct {
+	Paths    []string `json:"paths"`
+	Favorite bool     `json:"favorite"`
+	Add      []string `json:"add"`
+	Remove   []string `json:"remove"`
+}
+
+func (h *Handler) decodeMeta(w http.ResponseWriter, r *http.Request) (metaReq, bool) {
+	var req metaReq
+	if !h.decode(w, r, &req) {
+		return req, false
+	}
+	if len(req.Paths) == 0 || len(req.Paths) > 1000 {
+		writeErr(w, http.StatusBadRequest, "entre 1 et 1000 chemins attendus")
+		return req, false
+	}
+	return req, true
+}
+
+func (h *Handler) setFavorite(w http.ResponseWriter, r *http.Request) {
+	req, ok := h.decodeMeta(w, r)
+	if !ok {
+		return
+	}
+	if err := h.Store.SetFavorite(req.Paths, req.Favorite); err != nil {
+		fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) editTags(w http.ResponseWriter, r *http.Request) {
+	req, ok := h.decodeMeta(w, r)
+	if !ok {
+		return
+	}
+	if err := h.Store.EditTags(req.Paths, req.Add, req.Remove); err != nil {
+		fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) readFile(w http.ResponseWriter, r *http.Request) {

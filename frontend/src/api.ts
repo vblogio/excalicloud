@@ -6,6 +6,19 @@ export interface Entry {
   isDir: boolean;
   size: number;
   modTime: string;
+  tags?: string[];
+  favorite?: boolean;
+}
+
+export interface TagCount {
+  name: string;
+  count: number;
+}
+
+/** Filtres de recherche : tag exact et/ou favoris seulement. */
+export interface SearchFilter {
+  tag?: string | null;
+  fav?: boolean;
 }
 
 /** Résultat de recherche ; snippet = extrait du contenu qui correspond. */
@@ -77,8 +90,20 @@ export const api = {
   list: async (dir: string): Promise<Entry[]> =>
     (await request(`/api/list?path=${q(dir)}`)).json(),
 
-  search: async (text: string): Promise<Hit[]> =>
-    (await request(`/api/search?q=${q(text)}`)).json(),
+  search: async (text: string, f: SearchFilter = {}): Promise<Hit[]> =>
+    (
+      await request(`/api/search?q=${q(text)}${f.tag ? `&tag=${q(f.tag)}` : ""}${f.fav ? "&fav=true" : ""}`)
+    ).json(),
+
+  tags: async (): Promise<TagCount[]> => (await request("/api/tags")).json(),
+
+  setFavorite: async (paths: string[], favorite: boolean): Promise<void> => {
+    await request("/api/meta/favorite", json({ paths, favorite }));
+  },
+
+  editTags: async (paths: string[], add: string[], remove: string[]): Promise<void> => {
+    await request("/api/meta/tags", json({ paths, add, remove }));
+  },
 
   read: async (path: string): Promise<{ text: string; etag: string }> => {
     const res = await request(`/api/file?path=${q(path)}`);
