@@ -10,7 +10,7 @@
   --ok: #2b8a3e;
   --warn: #e67700;
   --topbar-h: 44px;
-  --drawer-w: 300px;
+  --drawer-w: 330px;
   color-scheme: light;
 }
 
@@ -45,6 +45,7 @@ body,
 
 button,
 .actions a {
+  -webkit-tap-highlight-color: transparent;
   font: inherit;
   color: inherit;
   background: var(--panel);
@@ -179,8 +180,14 @@ button:disabled {
   flex-wrap: wrap;
   gap: 4px;
 }
+.searchbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
 .search {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -222,7 +229,7 @@ button:disabled {
 li.active > .row {
   background: var(--accent-soft);
 }
-.row.drop,
+.item.drop > .row,
 .crumbs button.drop {
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -295,4 +302,255 @@ li.active > .row {
   .row .name {
     padding: 10px 6px; /* cibles tactiles plus grandes */
   }
+}
+
+/* --- Explorateur : sélection, vignettes, déplacement ----------------------- */
+
+:root {
+  --thumb-bg: #ffffff;
+}
+:root[data-theme="dark"] {
+  --thumb-bg: #121212;
+}
+.spacer {
+  flex: 1;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+:root[data-theme="dark"] button.primary {
+  color: #121212;
+}
+
+.selbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  font-size: 13px;
+}
+.selbar .count {
+  flex: 1;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.selbar button:not(.icon-btn) {
+  padding: 4px 8px;
+}
+.selbar .icon-btn {
+  padding: 4px 6px;
+}
+
+/* Case à cocher : au survol (souris), toujours visible pendant une sélection
+   et sur écran tactile. */
+.item .check {
+  width: 16px;
+  height: 16px;
+  margin: 0 0 0 4px;
+  flex: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+  opacity: 0;
+}
+.item:hover .check,
+.item .check:focus-visible,
+.selecting .item .check {
+  opacity: 1;
+}
+@media (hover: none) {
+  .item .check {
+    opacity: 1;
+  }
+}
+.item.selected > .row {
+  background: var(--accent-soft);
+  outline: 1px solid var(--accent);
+}
+.entries .item.up .row {
+  padding-left: 20px;
+}
+
+/* Miniatures */
+.thumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 33px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--thumb-bg);
+  overflow: hidden;
+}
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+:root[data-theme="dark"] .thumb img {
+  filter: invert(93%) hue-rotate(180deg); /* même rendu que le mode sombre d'Excalidraw */
+}
+.thumb .ph {
+  color: var(--muted);
+  font-size: 14px;
+}
+.thumb.server,
+.thumb.generating {
+  background: linear-gradient(90deg, var(--thumb-bg), var(--panel), var(--thumb-bg));
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Vue grille */
+.entries.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  grid-auto-flow: row dense;
+  gap: 6px;
+  align-content: start;
+}
+.entries.grid > .empty,
+.entries.grid > .menu-row {
+  grid-column: 1 / -1;
+}
+.entries.grid .row {
+  position: relative;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  height: 100%;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.entries.grid .row .name {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 4px;
+}
+.entries.grid .thumb,
+.entries.grid .icon {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+}
+.entries.grid .icon {
+  display: grid;
+  place-items: center;
+  font-size: 42px;
+}
+.entries.grid .label {
+  text-align: center;
+  font-size: 12.5px;
+}
+.entries.grid .where {
+  display: block;
+}
+.entries.grid .check {
+  position: absolute;
+  top: 8px;
+  left: 6px;
+  z-index: 1;
+}
+.entries.grid .more {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  border-radius: 6px;
+  opacity: 0;
+}
+.entries.grid .item:hover .more,
+.entries.grid .more:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .entries.grid .more {
+    opacity: 1;
+  }
+}
+.entries.grid .actions {
+  padding: 4px 2px 8px;
+}
+
+.drag-ghost {
+  position: fixed;
+  top: -100px;
+  left: -100px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font: 600 13px system-ui, sans-serif;
+}
+
+/* Dialogue « Déplacer vers… » */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.4);
+}
+.modal {
+  width: min(420px, 100%);
+  max-height: min(560px, 90dvh);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.3);
+}
+.modal h3 {
+  margin: 0;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.modal .folders {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+.modal .folders button {
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 9px 10px;
+}
+.modal .folders button:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+.modal .folders .empty {
+  padding: 10px;
+}
+.modal-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }

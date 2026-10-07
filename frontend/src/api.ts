@@ -8,6 +8,12 @@ export interface Entry {
   modTime: string;
 }
 
+export interface MoveResult {
+  from: string;
+  to?: string;
+  error?: string;
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -61,6 +67,10 @@ export const api = {
   move: async (from: string, to: string): Promise<Entry> =>
     (await request("/api/move", json({ from, to }))).json(),
 
+  /** Déplace plusieurs éléments dans dir ; le détail par élément indique les échecs. */
+  moveMany: async (paths: string[], dir: string): Promise<MoveResult[]> =>
+    (await request("/api/move-many", json({ paths, dir }))).json(),
+
   copy: async (from: string, to: string): Promise<Entry> =>
     (await request("/api/copy", json({ from, to }))).json(),
 
@@ -79,6 +89,17 @@ export const api = {
   },
 
   downloadUrl: (path: string) => `/api/file?path=${q(path)}`,
+
+  /** v = date du schéma : l'URL change à chaque nouvelle version (cache navigateur). */
+  thumbUrl: (path: string, v: string) => `/api/thumb?path=${q(path)}&v=${q(v)}`,
+
+  writeThumb: async (path: string, png: Blob): Promise<void> => {
+    await request(`/api/thumb?path=${q(path)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "image/png" },
+      body: png,
+    });
+  },
 };
 
 // Helpers de chemins (format "slash", relatifs à la racine).
