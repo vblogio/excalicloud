@@ -60,13 +60,19 @@ Bind mount au lieu du volume nommé : `- ./data:/data` puis `chown -R 65532:6553
 - **Bibliothèque** Excalidraw : persistée côté serveur, partagée entre tous les schémas.
 - **Largeur de l'explorateur** (bureau) : glisser la poignée entre l'explorateur et le canevas ; flèches ←/→ au clavier quand elle a le focus (Maj : pas plus grand), double-clic pour revenir à 330 px. Mémorisée par navigateur.
 - **Style** : l'explorateur et la barre du haut reprennent les couleurs, la police, les rayons et les tailles de boutons d'Excalidraw (jetons `--ex-*` en tête de `styles.css`), en clair comme en sombre.
-- **Mise à jour d'Excalidraw** : quand une version plus récente que celle embarquée est publiée sur npm, une icône apparaît à droite de la barre du haut ; un clic affiche les deux versions et la commande de reconstruction (voir *Mettre à jour Excalidraw*).
+- **Mise à jour d'Excalidraw** : quand la version publiée sur le canal choisi (voir *Paramètres*) diffère de celle embarquée, une icône apparaît à droite de la barre du haut ; un clic ouvre les paramètres sur la commande de reconstruction (voir *Mettre à jour Excalidraw*).
 - **Mode clair/sombre** : bouton ☀/☾ à droite de la barre du haut ; s'applique à l'interface et au canevas Excalidraw, reste synchronisé avec le choix du menu d'Excalidraw. Mémorisé par navigateur.
-- **Titre et logo** : bouton ✎ à droite de la barre (ou clic sur le titre). Le titre et le logo sont communs à tous les utilisateurs. Le logo (PNG, 5 Mo max) est recadré au centre, réduit à 64×64 px côté serveur et affiché dans un masque rond (34 px dans la barre, net sur écran HiDPI ; taille réglable via `--logo-size` dans `styles.css`).
+- **Paramètres** : bouton ⚙ à droite de la barre (ou clic sur le titre). Section *Apparence* : titre et logo. Section *Excalidraw* : canal suivi, *Stable* (`latest`) ou *Préversion* (`next`), versions publiées et commande de reconstruction. Les paramètres sont stockés dans `DATA_DIR/.settings.json`.
+- **Titre et logo** : communs à tous les utilisateurs. Le logo (PNG, 5 Mo max) est recadré au centre, réduit à 64×64 px côté serveur et affiché dans un masque rond (34 px dans la barre, net sur écran HiDPI ; taille réglable via `--logo-size` dans `styles.css`).
 
 ### Mettre à jour Excalidraw
 
-La version d'Excalidraw est figée au build (`frontend/package-lock.json`). Le serveur interroge le registre npm (`/api/update`, toutes les 12 h par défaut) et l'interface compare la dernière version publiée à celle embarquée. Pour reconstruire avec la nouvelle version :
+La version d'Excalidraw est figée au build (`frontend/package-lock.json`). Le serveur lit les dist-tags du paquet sur le registre npm (`/api/update`, toutes les 12 h par défaut) et l'interface compare la version du canal choisi dans les paramètres à celle embarquée :
+
+- `latest` : versions stables (0.18.1 au 2026-10-07) ;
+- `next` : préversion publiée à chaque modification de la branche principale d'Excalidraw (ex. `0.18.0-4f68076`). Son numéro est inférieur à la dernière stable alors que le code est plus récent : l'icône compare donc les versions par égalité, ce qui propose aussi le retour de `next` à `latest`.
+
+Changer de canal dans l'interface ne change rien tant que l'image n'est pas reconstruite. Pour reconstruire avec la version indiquée :
 
 ```bash
 EXCALIDRAW_VERSION=0.18.2 docker compose up -d --build   # ou EXCALIDRAW_VERSION=… dans .env
@@ -105,12 +111,12 @@ Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants co
 | POST | `/api/copy` | `{"from":"…","to":"…"}` | `Entry` |
 | DELETE | `/api/entry?path=x[&recursive=true]` | | `204` (déplacé dans `.trash/`) |
 | GET/PUT | `/api/library` | bibliothèque `excalidrawlib` | |
-| GET | `/api/settings` | | `{"title":"...","logo":"<version>"}` (`logo` vide sans logo) |
-| PUT | `/api/settings` | `{"title":"..."}` (80 caractères max, vide = titre par défaut) | réglages |
+| GET | `/api/settings` | | `{"title":"...","logo":"<version>","channel":"latest"}` (`logo` vide sans logo) |
+| PUT | `/api/settings` | `{"title":"..."}` (80 caractères max, vide = titre par défaut) et/ou `{"channel":"latest"\|"next"}` | réglages |
 | GET | `/api/logo?v=<version>` | | PNG 64×64 ; `404` sans logo |
 | PUT | `/api/logo` | PNG (5 Mo, 8192×8192 px max) | réglages ; image recadrée et ré-encodée |
 | DELETE | `/api/logo` | | réglages |
-| GET | `/api/update` | | `{"enabled","latest","checkedAt"}` |
+| GET | `/api/update` | | `{"enabled","tags":{"latest","next"},"latest","checkedAt"}` |
 | GET | `/healthz` | | `ok` (hors authentification) |
 
 `Entry` = `{"name","path","isDir","size","modTime"}`.

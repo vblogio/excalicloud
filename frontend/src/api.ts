@@ -14,15 +14,20 @@ export interface MoveResult {
   error?: string;
 }
 
-/** Personnalisation partagée ; logo = "" sans logo, sinon sa version. */
+/** Canal npm d'Excalidraw : latest (stable) ou next (préversion). */
+export type Channel = "latest" | "next";
+
+/** Paramètres partagés ; logo = "" sans logo, sinon sa version. */
 export interface Settings {
   title: string;
   logo: string;
+  channel: Channel;
 }
 
-/** Dernière version d'Excalidraw publiée sur npm (vide si inconnue ou désactivé). */
+/** Versions d'Excalidraw publiées sur npm par canal (vide si inconnu ou désactivé). */
 export interface UpdateStatus {
   enabled: boolean;
+  tags?: Partial<Record<Channel, string>>;
   latest?: string;
   checkedAt?: string;
 }
@@ -107,6 +112,9 @@ export const api = {
 
   setTitle: async (title: string): Promise<Settings> =>
     (await request("/api/settings", { ...json({ title }), method: "PUT" })).json(),
+
+  setChannel: async (channel: Channel): Promise<Settings> =>
+    (await request("/api/settings", { ...json({ channel }), method: "PUT" })).json(),
 
   /** Le serveur recadre au centre et ramène le PNG à 64x64. */
   uploadLogo: async (png: Blob): Promise<Settings> =>

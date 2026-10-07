@@ -15,11 +15,11 @@ import type {
 } from "@excalidraw/excalidraw/types";
 import type { OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { api, ApiError, basename, stripExt, type Settings } from "./api";
-import { CustomizeDialog, DEFAULT_TITLE } from "./CustomizeDialog";
 import { Explorer } from "./Explorer";
-import { CloseIcon, MenuIcon, MoonIcon, SaveIcon, SettingsIcon, SunIcon } from "./icons";
+import { CloseIcon, MenuIcon, MoonIcon, SaveIcon, SettingsIcon, SunIcon, UpdateIcon } from "./icons";
 import { Splitter } from "./Splitter";
-import { UpdateBadge } from "./UpdateBadge";
+import { SettingsDialog, DEFAULT_TITLE } from "./SettingsDialog";
+import { pendingVersion, useUpdateStatus } from "./update";
 import { storeThumb } from "./thumbs";
 
 type Theme = "light" | "dark";
@@ -87,8 +87,10 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [drawerWidth, setDrawerWidth] = useState(initialDrawerWidth);
   const [resizing, setResizing] = useState(false);
-  const [settings, setSettings] = useState<Settings>({ title: "", logo: "" });
-  const [customizing, setCustomizing] = useState(false);
+  const [settings, setSettings] = useState<Settings>({ title: "", logo: "", channel: "latest" });
+  const updateStatus = useUpdateStatus();
+  const pending = pendingVersion(updateStatus, settings.channel);
+  const [customizing, setCustomizing] = useState<false | "all" | "excalidraw">(false);
 
   const excalidraw = useRef<ExcalidrawImperativeAPI | null>(null);
   const pathRef = useRef<string | null>(null); // schéma ouvert (survit aux renommages)
@@ -219,9 +221,12 @@ export default function App() {
 
   openRef.current = openFile;
 
-  const onApi = useCallback((ex: ExcalidrawImperativeAPI) => {
+  const onApi = useCallback((ex: ExcalidrawImperativeAPI | null) => {
     excalidraw.current = ex;
   }, []);
+  // La prop s'appelle excalidrawAPI jusqu'à la 0.18 et onExcalidrawAPI sur le canal
+  // next : on passe les deux pour que l'image se construise avec l'un ou l'autre.
+  const apiProps = { excalidrawAPI: onApi, onExcalidrawAPI: onApi } as object;
 
   // --- Effets globaux --------------------------------------------------------
 
@@ -347,7 +352,7 @@ export default function App() {
         >
           <MenuIcon />
         </button>
-        <button className="brand" title="Personnaliser le titre et le logo" onClick={() => setCustomizing(true)}>
+        <button className="brand" title="Paramètres" onClick={() => setCustomizing("all")}>
           {settings.logo && <img className="logo" src={api.logoUrl(settings.logo)} alt="" />}
           <span className="brand-title">{appTitle}</span>
         </button>
@@ -384,7 +389,16 @@ export default function App() {
           </>
         )}
         <div className="topbar-tools">
-          <UpdateBadge />
+          {pending && (
+            <button
+              className="icon-btn update-btn"
+              title={`Excalidraw ${pending} disponible (installée : ${__EXCALIDRAW_VERSION__}) — reconstruire l'image`}
+              aria-label={`Mise à jour d'Excalidraw disponible : ${pending}`}
+              onClick={() => setCustomizing("excalidraw")}
+            >
+              <UpdateIcon />
+            </button>
+          )}
           <button
             className="icon-btn"
             aria-label={theme === "dark" ? "Passer en mode clair" : "Passer en mode sombre"}
@@ -395,9 +409,9 @@ export default function App() {
           </button>
           <button
             className="icon-btn"
-            aria-label="Personnaliser le titre et le logo"
-            title="Personnaliser"
-            onClick={() => setCustomizing(true)}
+            aria-label="Paramètres"
+            title="Paramètres (titre, logo, version d'Excalidraw)"
+            onClick={() => setCustomizing("all")}
           >
             <SettingsIcon />
           </button>
@@ -430,7 +444,7 @@ export default function App() {
             // Remontage complet à chaque ouverture : historique et état propres.
             key={scene.id}
             initialData={{ ...scene.initialData, libraryItems: library }}
-            excalidrawAPI={onApi}
+            {...apiProps}
             onChange={onChange}
             onLibraryChange={onLibraryChange}
             theme={theme}
@@ -448,7 +462,13 @@ export default function App() {
       </main>
 
       {customizing && (
-        <CustomizeDialog settings={settings} onChange={setSettings} onClose={() => setCustomizing(false)} />
+        <SettingsDialog
+          settings={settings}
+          update={updateStatus}
+          focusExcalidraw={customizing === "excalidraw"}
+          onChange={setSettings}
+          onClose={() => setCustomizing(false)}
+        />
       )}
     </div>
   );

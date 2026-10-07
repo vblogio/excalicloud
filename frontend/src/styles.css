@@ -929,14 +929,6 @@ li.active > .row {
   background: var(--warn);
   box-shadow: 0 0 0 2px var(--ex-island);
 }
-.modal.update p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-}
-.modal.update .small {
-  font-size: 12px;
-}
 .modal .cmd {
   display: flex;
   align-items: center;
@@ -954,4 +946,62 @@ li.active > .row {
 .modal .link {
   color: var(--ex-primary);
   font-size: 13px;
+}
+
+/* Dialogue « Paramètres » */
+.modal.settings {
+  width: min(480px, 100%);
+  max-height: min(720px, 92dvh);
+  overflow-y: auto;
+}
+.modal h4 {
+  margin: 6px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.modal h3 + h4 {
+  border-top: none;
+  padding-top: 0;
+}
+.modal .versions {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.modal small code {
+  font-size: 11px;
+}
+/* Choix du canal : RadioGroup d'Excalidraw. */
+.radio-group {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--ex-surface-high);
+  border-radius: 0.625rem;
+  background: var(--ex-island);
+  align-self: flex-start;
+}
+.radio-group button {
+  flex-direction: column;
+  gap: 2px;
+  height: auto;
+  min-width: 110px;
+  padding: 6px 12px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+}
+.radio-group button small {
+  font-size: 11px;
+  letter-spacing: normal;
+  opacity: 0.75;
+}
+.radio-group button.on {
+  background: var(--ex-primary);
+  color: var(--ex-surface-lowest);
 }
