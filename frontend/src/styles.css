@@ -1,28 +1,71 @@
+/* Jetons repris de l'interface d'Excalidraw 0.18 (variables --color-* de
+   @excalidraw/excalidraw/index.css), pour que l'explorateur et la barre de titre
+   aient le même rendu que l'éditeur, en clair comme en sombre. */
 :root {
-  --bg: #ffffff;
-  --panel: #f6f6f9;
-  --fg: #1b1b1f;
-  --muted: #6b6b76;
-  --border: #e1e1e8;
-  --accent: #6965db;
-  --accent-soft: #e3e2fe;
-  --danger: #c92a2a;
+  --ex-island: #ffffff; /* --island-bg-color */
+  --ex-canvas: #ffffff; /* --default-bg-color */
+  --ex-surface-lowest: #ffffff;
+  --ex-surface-low: #ececf4;
+  --ex-surface-mid: #f2f2f7;
+  --ex-surface-high: #f1f0ff;
+  --ex-on-surface: #1b1b1f;
+  --ex-primary: #6965db;
+  --ex-brand-hover: #5753d0;
+  --ex-brand-active: #4440bf;
+  --ex-primary-container: #e0dfff; /* --color-surface-primary-container */
+  --ex-on-primary-container: #030064;
+  --ex-outline: #767680;
+  --ex-outline-variant: #c5c5d0;
+  --ex-gray-20: #ebebeb;
+  --ex-muted: #7a7a7a; /* --color-gray-60 */
+  --ex-danger: #c92a2a; /* --button-destructive-color */
+  --ex-danger-bg: #ffe3e3;
+  --ex-scrollbar: #ced4da;
+  --ex-shadow-island: 0 0 0.93px 0 rgb(0 0 0 / 0.17), 0 0 3.13px 0 rgb(0 0 0 / 0.08), 0 7px 14px 0 rgb(0 0 0 / 0.05);
+  --ex-shadow-modal: 0 100px 80px rgb(0 0 0 / 0.07), 0 41.8px 33.4px rgb(0 0 0 / 0.05), 0 22.3px 17.9px rgb(0 0 0 / 0.042),
+    0 12.5px 10px rgb(0 0 0 / 0.035), 0 6.65px 5.3px rgb(0 0 0 / 0.028), 0 2.77px 2.2px rgb(0 0 0 / 0.02);
+  --ex-radius-md: 0.375rem;
+  --ex-radius-lg: 0.5rem;
+  --ex-btn: 2rem; /* --default-button-size */
+  --ex-btn-lg: 2.25rem; /* --lg-button-size */
+  --ex-font: Assistant, system-ui, BlinkMacSystemFont, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /* Alias utilisés par le reste de la feuille. */
+  --bg: var(--ex-canvas);
+  --panel: var(--ex-island);
+  --fg: var(--ex-on-surface);
+  --muted: var(--ex-muted);
+  --border: var(--ex-gray-20);
+  --accent: var(--ex-primary);
+  --accent-soft: var(--ex-primary-container);
+  --danger: var(--ex-danger);
   --ok: #2b8a3e;
   --warn: #e67700;
-  --topbar-h: 44px;
+  --topbar-h: 48px;
   --drawer-w: 330px;
   color-scheme: light;
 }
 
 :root[data-theme="dark"] {
-  --bg: #121212;
-  --panel: #1e1e22;
-  --fg: #e4e4ea;
-  --muted: #9a9aa6;
-  --border: #33333a;
-  --accent: #a8a5ff;
-  --accent-soft: #2e2d4d;
-  --danger: #ff6b6b;
+  --ex-island: #232329;
+  --ex-canvas: #121212;
+  --ex-surface-lowest: hsl(0 0% 7%);
+  --ex-surface-low: hsl(240 8% 15%);
+  --ex-surface-mid: hsl(240 6% 10%);
+  --ex-surface-high: hsl(245 10% 21%);
+  --ex-on-surface: #e3e3e8;
+  --ex-primary: #a8a5ff;
+  --ex-brand-hover: #bbb8ff;
+  --ex-brand-active: #d0ccff;
+  --ex-primary-container: #403e6a;
+  --ex-on-primary-container: #e0dfff;
+  --ex-outline: #8e8d9c;
+  --ex-outline-variant: #46464f;
+  --ex-gray-20: hsl(245 10% 21%);
+  --ex-muted: #999999;
+  --ex-danger: #ffa8a8;
+  --ex-danger-bg: #5a0000;
+  --ex-scrollbar: #343a40;
   --ok: #69db7c;
   --warn: #ffa94d;
   color-scheme: dark;
@@ -40,49 +83,149 @@ body,
   overflow: hidden;
   background: var(--bg);
   color: var(--fg);
-  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 14px/1.4 var(--ex-font);
 }
 
+/* Bouton standard : celui de « Bibliothèque » dans Excalidraw (.sidebar-trigger). */
 button,
 .actions a {
   -webkit-tap-highlight-color: transparent;
-  font: inherit;
-  color: inherit;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: var(--ex-btn-lg);
+  padding: 0 0.625rem;
+  font: 0.75rem/1 var(--ex-font);
+  letter-spacing: 0.4px;
+  color: var(--ex-on-surface);
+  background: var(--ex-surface-low);
+  border: none;
+  border-radius: var(--ex-radius-lg);
+  box-shadow: 0 0 0 1px var(--ex-surface-lowest);
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
 }
+button svg,
+.actions a svg {
+  flex: none;
+}
 button:hover:not(:disabled),
 .actions a:hover {
-  border-color: var(--accent);
+  background: var(--ex-surface-high);
+}
+button:active:not(:disabled),
+.actions a:active {
+  box-shadow: 0 0 0 1px var(--ex-brand-active);
+}
+button:focus-visible,
+.actions a:focus-visible {
+  outline: 2px solid var(--ex-primary);
+  outline-offset: 1px;
+}
+button.active {
+  background: var(--ex-primary-container);
+  color: var(--ex-on-primary-container);
 }
 button:disabled {
   opacity: 0.5;
   cursor: default;
 }
+button.square {
+  width: var(--ex-btn-lg);
+  padding: 0;
+}
+button.primary {
+  background: var(--ex-primary);
+  color: var(--ex-surface-lowest);
+  font-weight: 600;
+}
+button.primary:hover:not(:disabled) {
+  background: var(--ex-brand-hover);
+}
+button.danger,
+.actions .danger {
+  color: var(--ex-danger);
+}
+button.danger:hover:not(:disabled) {
+  background: var(--ex-danger-bg);
+}
+
+/* Bouton icône : ceux des îlots d'Excalidraw (outils, zoom, annuler). */
 .icon-btn {
-  border: none;
+  width: var(--ex-btn);
+  height: var(--ex-btn);
+  padding: 0;
+  flex: none;
   background: transparent;
-  padding: 4px 8px;
+  box-shadow: none;
   font-size: 16px;
 }
+.icon-btn:hover:not(:disabled) {
+  background: var(--ex-surface-high);
+}
+.icon-btn.on {
+  background: var(--ex-primary-container);
+  color: var(--ex-on-primary-container);
+}
+
+/* Champ texte : ExcTextField. */
+.text-input,
+.search {
+  height: var(--ex-btn-lg);
+  padding: 0 0.75rem;
+  border: 1px solid var(--ex-gray-20);
+  border-radius: var(--ex-radius-lg);
+  background: var(--ex-surface-low);
+  color: var(--ex-on-surface);
+  font: 0.875rem var(--ex-font);
+}
+.text-input:hover,
+.search:hover {
+  border-color: var(--ex-brand-hover);
+}
+.text-input:focus,
+.search:focus-within {
+  outline: none;
+  border-color: var(--ex-brand-active);
+}
+.text-input::placeholder,
+.search input::placeholder {
+  color: var(--ex-outline);
+}
+
 .muted {
   color: var(--muted);
 }
 .danger {
   color: var(--danger);
 }
-.error {
-  margin: 6px 0;
+.error,
+.notice {
+  margin: 0;
   padding: 6px 10px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--danger) 15%, transparent);
-  color: var(--danger);
+  border-radius: var(--ex-radius-lg);
+  font-size: 13px;
   cursor: pointer;
+}
+.error {
+  background: var(--ex-danger-bg);
+  color: var(--danger);
+}
+.notice {
+  background: var(--ex-surface-low);
+  white-space: pre-line;
+}
+.notice.busy {
+  cursor: progress;
+  color: var(--muted);
+}
+
+/* Barres de défilement fines, comme dans Excalidraw. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ex-scrollbar) transparent;
 }
 
 /* --- Mise en page ----------------------------------------------------------- */
@@ -168,8 +311,12 @@ button:disabled {
   flex: none;
   border: none;
   background: transparent;
-  padding: 2px 4px;
-  font-weight: 600;
+  height: auto;
+  padding: 2px 6px 2px 2px;
+  box-shadow: none;
+  font: 600 15px/1.2 var(--ex-font);
+  letter-spacing: normal;
+  border-radius: var(--ex-radius-lg);
 }
 .brand-title {
   overflow: hidden;
@@ -198,22 +345,11 @@ button:disabled {
   padding-left: 4px;
   border-left: 1px solid var(--border);
 }
-.topbar-tools .icon-btn {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border-radius: 6px;
-}
-.topbar-tools .icon-btn:hover {
-  background: var(--bg);
-}
 .status {
   font-size: 12px;
   padding: 2px 8px;
   border-radius: 10px;
-  background: var(--bg);
+  background: var(--ex-surface-low);
 }
 .status.saved {
   color: var(--ok);
@@ -262,32 +398,56 @@ button:disabled {
 /* --- Explorateur ------------------------------------------------------------ */
 
 .explorer {
+  position: relative;
   width: var(--drawer-w);
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 8px;
-  gap: 6px;
+  padding: 12px 10px 8px;
+  gap: 8px;
 }
 .toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
 }
 .searchbar {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 .search {
   flex: 1;
   min-width: 0;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0.625rem;
+  color: var(--ex-outline);
+  cursor: text;
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--ex-on-surface);
   font: inherit;
+}
+/* Sélecteur vignettes/liste : groupe d'onglets de la barre latérale d'Excalidraw. */
+.segmented {
+  display: flex;
+  flex: none;
+  padding: 2px;
+  border: 1px solid var(--ex-surface-high);
+  border-radius: 0.625rem;
+  background: var(--ex-canvas);
+}
+.segmented .icon-btn {
+  width: calc(var(--ex-btn-lg) - 6px);
+  height: calc(var(--ex-btn-lg) - 6px);
 }
 .crumbs {
   display: flex;
@@ -296,9 +456,13 @@ button:disabled {
   font-size: 13px;
 }
 .crumbs button {
-  border: 1px dashed transparent;
+  height: auto;
+  padding: 3px 6px;
   background: transparent;
-  padding: 2px 4px;
+  box-shadow: none;
+  outline: 1px dashed transparent;
+  font-size: 13px;
+  letter-spacing: normal;
 }
 .entries {
   list-style: none;
@@ -314,11 +478,11 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 4px;
-  border-radius: 6px;
+  border-radius: var(--ex-radius-lg);
   border: 1px dashed transparent;
 }
 .row:hover {
-  background: var(--bg);
+  background: var(--ex-surface-low);
 }
 li.active > .row {
   background: var(--accent-soft);
@@ -326,6 +490,7 @@ li.active > .row {
 .item.drop > .row,
 .crumbs button.drop {
   border-color: var(--accent);
+  outline-color: var(--accent);
   background: var(--accent-soft);
 }
 .row .name {
@@ -334,10 +499,30 @@ li.active > .row {
   gap: 8px;
   align-items: center;
   min-width: 0;
+  height: auto;
+  justify-content: flex-start;
   text-align: left;
   border: none;
   background: transparent;
-  padding: 7px 6px;
+  box-shadow: none;
+  padding: 6px;
+  font-size: 13px;
+  line-height: 1.3;
+  letter-spacing: normal;
+}
+.row .name:hover:not(:disabled) {
+  background: transparent;
+}
+.row .icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  color: var(--muted);
+}
+.row .icon.folder,
+.folder {
+  color: var(--ex-primary);
 }
 .row .label {
   overflow: hidden;
@@ -355,6 +540,10 @@ li.active > .row {
   align-items: center;
   padding: 4px 6px 8px 30px;
   font-size: 13px;
+}
+.actions button,
+.actions a {
+  height: var(--ex-btn);
 }
 
 /* --- Mobile : l'explorateur devient un tiroir superposé -------------------- */
@@ -391,6 +580,7 @@ li.active > .row {
   }
   .row .meta,
   .topbar .status,
+  .save-label,
   .has-scene .brand-title {
     display: none;
   }
@@ -414,14 +604,6 @@ li.active > .row {
 .spacer {
   flex: 1;
 }
-button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-:root[data-theme="dark"] button.primary {
-  color: #121212;
-}
 
 .selbar {
   display: flex;
@@ -429,20 +611,24 @@ button.primary {
   align-items: center;
   gap: 4px;
   padding: 4px 6px;
-  border-radius: 6px;
-  background: var(--accent-soft);
+  border-radius: var(--ex-radius-lg);
+  background: var(--ex-primary-container);
+  color: var(--ex-on-primary-container);
   font-size: 13px;
+}
+.selbar button {
+  height: var(--ex-btn);
 }
 .selbar .count {
   flex: 1;
   font-weight: 600;
   white-space: nowrap;
 }
-.selbar button:not(.icon-btn) {
-  padding: 4px 8px;
-}
 .selbar .icon-btn {
-  padding: 4px 6px;
+  color: inherit;
+}
+.selbar .icon-btn.danger {
+  color: var(--danger);
 }
 
 /* Case à cocher : au survol (souris), toujours visible pendant une sélection
@@ -481,7 +667,7 @@ button.primary {
   place-items: center;
   width: 44px;
   height: 33px;
-  border-radius: 4px;
+  border-radius: var(--ex-radius-md);
   border: 1px solid var(--border);
   background: var(--thumb-bg);
   overflow: hidden;
@@ -529,7 +715,15 @@ button.primary {
   gap: 0;
   height: 100%;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--ex-surface-lowest);
+  transition: border-color 0.1s;
+}
+.entries.grid .row:hover {
+  border-color: var(--ex-primary);
+  background: var(--ex-surface-lowest);
+}
+.entries.grid .row .name {
+  justify-content: flex-start;
 }
 .entries.grid .row .name {
   flex-direction: column;
@@ -544,9 +738,8 @@ button.primary {
   aspect-ratio: 4 / 3;
 }
 .entries.grid .icon {
-  display: grid;
-  place-items: center;
-  font-size: 42px;
+  border-radius: var(--ex-radius-md);
+  background: var(--ex-surface-mid);
 }
 .entries.grid .label {
   text-align: center;
@@ -589,9 +782,9 @@ button.primary {
   left: -100px;
   padding: 4px 10px;
   border-radius: 12px;
-  background: var(--accent);
-  color: #fff;
-  font: 600 13px system-ui, sans-serif;
+  background: var(--ex-primary);
+  color: var(--ex-surface-lowest);
+  font: 600 13px var(--ex-font);
 }
 
 /* Dialogue « Déplacer vers… » */
@@ -610,11 +803,11 @@ button.primary {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 14px;
-  border-radius: 10px;
-  background: var(--panel);
+  padding: 16px;
+  border-radius: 0.75rem;
+  background: var(--ex-island);
   border: 1px solid var(--border);
-  box-shadow: 0 8px 32px rgb(0 0 0 / 0.3);
+  box-shadow: var(--ex-shadow-modal);
 }
 .modal h3 {
   margin: 0;
@@ -631,19 +824,23 @@ button.primary {
   min-height: 120px;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
+  border-radius: var(--ex-radius-lg);
+  background: var(--ex-surface-lowest);
 }
 .modal .folders button {
   width: 100%;
+  height: auto;
+  justify-content: flex-start;
   text-align: left;
-  border: none;
   border-radius: 0;
   background: transparent;
+  box-shadow: none;
   padding: 9px 10px;
+  font-size: 13px;
+  letter-spacing: normal;
 }
 .modal .folders button:hover:not(:disabled) {
-  background: var(--accent-soft);
+  background: var(--ex-surface-high);
 }
 .modal .folders .empty {
   padding: 10px;
@@ -682,4 +879,79 @@ button.primary {
 }
 .logo-actions small {
   flex-basis: 100%;
+}
+
+/* --- Import par glisser-déposer -------------------------------------------- */
+
+.drop-hint {
+  position: absolute;
+  inset: 8px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+  border: 2px dashed var(--ex-primary);
+  border-radius: var(--ex-radius-lg);
+  background: color-mix(in srgb, var(--ex-island) 96%, transparent);
+  backdrop-filter: blur(2px);
+  color: var(--ex-primary);
+  font-weight: 600;
+  pointer-events: none;
+}
+.drop-hint small {
+  color: var(--muted);
+  font-weight: 400;
+}
+/* Survol d'un dossier précis : l'indication générale s'efface. */
+.explorer:has(.item.drop) .drop-hint,
+.explorer:has(.crumbs .drop) .drop-hint {
+  opacity: 0;
+}
+
+/* --- Mise à jour d'Excalidraw ---------------------------------------------- */
+
+.update-btn {
+  position: relative;
+  color: var(--ex-primary);
+}
+.update-btn::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 0 2px var(--ex-island);
+}
+.modal.update p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.modal.update .small {
+  font-size: 12px;
+}
+.modal .cmd {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 4px 10px;
+  border-radius: var(--ex-radius-lg);
+  background: var(--ex-surface-low);
+}
+.modal .cmd code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.modal .link {
+  color: var(--ex-primary);
+  font-size: 13px;
 }
