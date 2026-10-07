@@ -6,6 +6,7 @@
 package storage
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -52,6 +53,9 @@ type Entry struct {
 type Store struct {
 	root string
 
+	// History règle l'historique des versions (DefaultHistory par défaut).
+	History HistoryPolicy
+
 	settingsMu sync.Mutex // sérialise les lectures-modifications de .settings.json
 }
 
@@ -69,7 +73,7 @@ func New(root string) (*Store, error) {
 	if abs, err = filepath.EvalSymlinks(abs); err != nil {
 		return nil, err
 	}
-	return &Store{root: abs}, nil
+	return &Store{root: abs, History: DefaultHistory}, nil
 }
 
 // Clean normalise un chemin relatif : "/a/../b/" -> "b", "" -> "".
@@ -269,6 +273,10 @@ func (s *Store) Write(rel string, data []byte, ifMatch string, create bool) (Ent
 		return Entry{}, "", ErrConflict
 	case err != nil && !errors.Is(err, fs.ErrNotExist):
 		return Entry{}, "", err
+	case err == nil && !bytes.Equal(cur, data):
+		if fi, err := os.Stat(abs); err == nil {
+			s.autoSnapshot(c, cur, fi.ModTime())
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return Entry{}, "", err
@@ -363,6 +371,7 @@ func (s *Store) Move(from, to string) (Entry, error) {
 		return Entry{}, mapErr(err)
 	}
 	s.moveThumb(cf, ct, fi.IsDir())
+	s.moveHistory(cf, ct)
 	fi, err = os.Stat(at)
 	if err != nil {
 		return Entry{}, err
@@ -463,6 +472,7 @@ func (s *Store) Delete(rel string, recursive bool) error {
 		return err
 	}
 	s.removeThumb(c, fi.IsDir())
+	s.trashHistory(c, trash)
 	return nil
 }
 

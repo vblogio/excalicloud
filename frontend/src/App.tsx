@@ -16,7 +16,8 @@ import type {
 import type { OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { api, ApiError, basename, stripExt, type Settings } from "./api";
 import { Explorer } from "./Explorer";
-import { CloseIcon, MenuIcon, MoonIcon, SaveIcon, SettingsIcon, SunIcon, UpdateIcon } from "./icons";
+import { CloseIcon, HistoryIcon, MenuIcon, MoonIcon, SaveIcon, SettingsIcon, SunIcon, UpdateIcon } from "./icons";
+import { HistoryDialog } from "./HistoryDialog";
 import { Splitter } from "./Splitter";
 import { SettingsDialog, DEFAULT_TITLE } from "./SettingsDialog";
 import { pendingVersion, useUpdateStatus } from "./update";
@@ -91,6 +92,7 @@ export default function App() {
   const updateStatus = useUpdateStatus();
   const pending = pendingVersion(updateStatus, settings.channel);
   const [customizing, setCustomizing] = useState<false | "all" | "excalidraw">(false);
+  const [historyFor, setHistoryFor] = useState<string | null>(null);
 
   const excalidraw = useRef<ExcalidrawImperativeAPI | null>(null);
   const pathRef = useRef<string | null>(null); // schéma ouvert (survit aux renommages)
@@ -335,6 +337,28 @@ export default function App() {
     [closeFile],
   );
 
+  // --- Historique -------------------------------------------------------------
+
+  /** Les modifications en cours sont enregistrées avant d'afficher l'historique. */
+  const showHistory = useCallback(
+    async (path: string) => {
+      if (path === pathRef.current) await save();
+      setHistoryFor(path);
+    },
+    [save],
+  );
+
+  const restoreVersion = useCallback(
+    async (path: string, id: string) => {
+      const open = path === pathRef.current;
+      if (open) await save();
+      await api.restore(path, id);
+      if (open) await openFile(path, { skipFlush: true });
+      setRefreshKey((k) => k + 1);
+    },
+    [save, openFile],
+  );
+
   // --- Rendu -----------------------------------------------------------------
 
   return (
@@ -377,6 +401,14 @@ export default function App() {
             >
               <SaveIcon />
               <span className="save-label">Enregistrer</span>
+            </button>
+            <button
+              className="icon-btn"
+              aria-label="Historique des versions"
+              title="Historique des versions"
+              onClick={() => showHistory(scene.path)}
+            >
+              <HistoryIcon />
             </button>
             <button
               className="icon-btn"
@@ -425,6 +457,7 @@ export default function App() {
           onOpen={(p) => openFile(p)}
           onMoved={onMoved}
           onDeleted={onDeleted}
+          onHistory={showHistory}
         />
       </aside>
       <Splitter
@@ -460,6 +493,19 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {historyFor && (
+        <HistoryDialog
+          path={historyFor}
+          theme={theme}
+          onRestore={(id) => restoreVersion(historyFor, id)}
+          onCopied={(p) => {
+            setRefreshKey((k) => k + 1);
+            openFile(p);
+          }}
+          onClose={() => setHistoryFor(null)}
+        />
+      )}
 
       {customizing && (
         <SettingsDialog

@@ -50,6 +50,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Historique des versions : HISTORY_KEEP versions par schéma (0 : désactivé),
+	// au plus une toutes les HISTORY_INTERVAL, purgées après HISTORY_MAX_AGE (0 : jamais).
+	if store.History, err = historyPolicy(); err != nil {
+		slog.Error("historique", "err", err)
+		os.Exit(1)
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -91,7 +98,8 @@ func main() {
 	}
 
 	go func() {
-		slog.Info("démarrage", "addr", addr, "data", dataDir)
+		slog.Info("démarrage", "addr", addr, "data", dataDir,
+			"history_keep", store.History.Keep, "history_interval", store.History.Interval.String())
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("serveur", "err", err)
 			os.Exit(1)
@@ -102,6 +110,22 @@ func main() {
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
 	slog.Info("arrêt")
+}
+
+func historyPolicy() (storage.HistoryPolicy, error) {
+	p := storage.DefaultHistory
+	keep, err := strconv.Atoi(env("HISTORY_KEEP", strconv.Itoa(p.Keep)))
+	if err != nil || keep < 0 {
+		return p, errors.New("HISTORY_KEEP invalide (entier >= 0)")
+	}
+	p.Keep = keep
+	if p.Interval, err = time.ParseDuration(env("HISTORY_INTERVAL", p.Interval.String())); err != nil || p.Interval < 0 {
+		return p, errors.New("HISTORY_INTERVAL invalide (ex. 10m, 0 : à chaque enregistrement)")
+	}
+	if p.MaxAge, err = time.ParseDuration(env("HISTORY_MAX_AGE", "0")); err != nil || p.MaxAge < 0 {
+		return p, errors.New("HISTORY_MAX_AGE invalide (ex. 2160h, 0 : illimité)")
+	}
+	return p, nil
 }
 
 func healthcheck(addr string) int {

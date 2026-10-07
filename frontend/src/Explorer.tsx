@@ -52,6 +52,8 @@ interface Props {
   onMoved: (from: string, to: string) => void;
   /** Un fichier ou dossier a été supprimé. */
   onDeleted: (path: string) => void;
+  /** Affiche l'historique des versions d'un schéma. */
+  onHistory: (path: string) => void;
 }
 
 type View = "list" | "grid";
@@ -78,7 +80,7 @@ const initialView = (): View => {
 const canMoveInto = (path: string, targetDir: string) =>
   dirname(path) !== targetDir && targetDir !== path && !targetDir.startsWith(path + "/");
 
-export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted }: Props) {
+export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHistory }: Props) {
   const [dir, setDir] = useState(() => (current ? dirname(current) : ""));
   const [entries, setEntries] = useState<Entry[]>([]);
   const [query, setQuery] = useState("");
@@ -421,6 +423,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted }: Pr
       <button onClick={() => rename(e)}>Renommer</button>
       <button onClick={() => setMoving([e.path])}>Déplacer…</button>
       {!e.isDir && <button onClick={() => duplicate(e)}>Dupliquer</button>}
+      {!e.isDir && <button onClick={() => onHistory(e.path)}>Historique…</button>}
       {!e.isDir && (
         <a href={api.downloadUrl(e.path)} download={e.name}>
           Télécharger

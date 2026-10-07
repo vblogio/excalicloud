@@ -21,6 +21,11 @@ services:
       # Icône « mise à jour d'Excalidraw disponible » (interroge registry.npmjs.org).
       UPDATE_CHECK: ${UPDATE_CHECK:-true}
       UPDATE_CHECK_INTERVAL: ${UPDATE_CHECK_INTERVAL:-12h}
+      # Historique des versions (DATA_DIR/.history) : versions gardées par schéma
+      # (0 : désactivé), écart minimal entre deux versions, âge max (0 : illimité).
+      HISTORY_KEEP: ${HISTORY_KEEP:-50}
+      HISTORY_INTERVAL: ${HISTORY_INTERVAL:-10m}
+      HISTORY_MAX_AGE: ${HISTORY_MAX_AGE:-0}
     volumes:
       # Volume nommé : les droits (uid 65532) sont hérités de l'image.
       # Pour un bind mount (ex. ./data:/data), faire `chown -R 65532:65532 ./data`.

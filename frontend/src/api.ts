@@ -32,6 +32,13 @@ export interface UpdateStatus {
   checkedAt?: string;
 }
 
+/** Version enregistrée d'un schéma (time : date de ce contenu). */
+export interface Version {
+  id: string;
+  time: string;
+  size: number;
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -97,6 +104,22 @@ export const api = {
   remove: async (path: string, recursive: boolean): Promise<void> => {
     await request(`/api/entry?path=${q(path)}&recursive=${recursive}`, { method: "DELETE" });
   },
+
+  history: async (path: string): Promise<Version[]> =>
+    (await request(`/api/history?path=${q(path)}`)).json(),
+
+  readVersion: async (path: string, id: string): Promise<string> =>
+    (await request(`/api/history/version?path=${q(path)}&id=${q(id)}`)).text(),
+
+  /** Crée une version du contenu courant (sans attendre l'intervalle automatique). */
+  snapshot: async (path: string): Promise<Version> =>
+    (await request("/api/history/snapshot", json({ path }))).json(),
+
+  /** Restaure une version ; le contenu remplacé devient lui-même une version. */
+  restore: async (path: string, id: string): Promise<Entry> =>
+    (await request("/api/history/restore", json({ path, id }))).json(),
+
+  versionUrl: (path: string, id: string) => `/api/history/version?path=${q(path)}&id=${q(id)}`,
 
   readLibrary: async (): Promise<unknown> => (await request("/api/library")).json(),
 

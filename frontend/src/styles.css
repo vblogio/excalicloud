@@ -1005,3 +1005,125 @@ li.active > .row {
   background: var(--ex-primary);
   color: var(--ex-surface-lowest);
 }
+
+/* --- Historique des versions ----------------------------------------------- */
+
+.modal.history {
+  width: min(920px, 100%);
+  height: min(640px, 92dvh);
+  max-height: none;
+}
+.history-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.history-head h3 {
+  flex: 1;
+  min-width: 0;
+}
+.history-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 10px;
+}
+.versions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--ex-radius-lg);
+  background: var(--ex-surface-lowest);
+}
+.versions-list button {
+  width: 100%;
+  height: auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+  letter-spacing: normal;
+}
+.versions-list button.on {
+  background: var(--accent-soft);
+  color: var(--ex-on-primary-container);
+}
+.versions-list small {
+  font-size: 11px;
+}
+.versions-list .empty {
+  padding: 10px;
+  font-size: 13px;
+}
+.history-preview {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.history-preview .segmented {
+  align-self: flex-start;
+}
+.history-preview .segmented button {
+  height: calc(var(--ex-btn-lg) - 6px);
+  background: transparent;
+  box-shadow: none;
+}
+.history-preview .segmented button.on {
+  background: var(--ex-primary-container);
+  color: var(--ex-on-primary-container);
+}
+.svg-box {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--ex-radius-lg);
+  background: var(--ex-surface-lowest);
+  color: var(--muted);
+}
+.svg-box svg {
+  max-width: 100%;
+  max-height: 100%;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 12px;
+}
+.legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  border-radius: 2px;
+}
+.modal-actions a.link {
+  display: inline-flex;
+  padding: 6px;
+}
+@media (max-width: 640px) {
+  .modal.history {
+    height: 92dvh;
+  }
+  .history-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(90px, 30%) 1fr;
+  }
+  .history-head button span {
+    display: none;
+  }
+}

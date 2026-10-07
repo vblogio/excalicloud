@@ -10,6 +10,10 @@
 //	POST   /api/copy     {"from":"x","to":"y"}    duplication d'un schéma
 //	DELETE /api/entry?path=x[&recursive=true]     mise à la corbeille
 //	GET    /api/thumb?path=x  /  PUT (image/png)   miniature d'un schéma
+//	GET    /api/history?path=x                   versions d'un schéma
+//	GET    /api/history/version?path=x&id=v      contenu d'une version
+//	POST   /api/history/snapshot {"path"}        version du contenu courant
+//	POST   /api/history/restore {"path","id"}    restauration (ETag en en-tête)
 //	GET    /api/library  /  PUT /api/library      bibliothèque Excalidraw
 //	GET    /api/settings / PUT {"title","channel"} paramètres (titre, logo, canal)
 //	GET    /api/logo  /  PUT (image/png)  /  DELETE   logo 64x64
@@ -47,6 +51,10 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/entry", h.delete)
 	mux.HandleFunc("GET /api/thumb", h.readThumb)
 	mux.HandleFunc("PUT /api/thumb", h.writeThumb)
+	mux.HandleFunc("GET /api/history", h.history)
+	mux.HandleFunc("GET /api/history/version", h.readVersion)
+	mux.HandleFunc("POST /api/history/snapshot", h.snapshot)
+	mux.HandleFunc("POST /api/history/restore", h.restore)
 	mux.HandleFunc("GET /api/library", h.readLibrary)
 	mux.HandleFunc("PUT /api/library", h.writeLibrary)
 	mux.HandleFunc("GET /api/settings", h.readSettings)
@@ -265,6 +273,61 @@ func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
+	vs, err := h.Store.Versions(r.URL.Query().Get("path"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	writeJSON(w, http.StatusOK, vs)
+}
+
+func (h *Handler) readVersion(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	data, err := h.Store.ReadVersion(q.Get("path"), q.Get("id"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	// Une version ne change jamais.
+	w.Header().Set("Cache-Control", "private, max-age=86400, immutable")
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(data)
+}
+
+func (h *Handler) snapshot(w http.ResponseWriter, r *http.Request) {
+	var req pathReq
+	if !h.decode(w, r, &req) {
+		return
+	}
+	v, err := h.Store.Snapshot(req.Path)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, v)
+}
+
+type restoreReq struct {
+	Path string `json:"path"`
+	ID   string `json:"id"`
+}
+
+func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
+	var req restoreReq
+	if !h.decode(w, r, &req) {
+		return
+	}
+	entry, etag, err := h.Store.Restore(req.Path, req.ID)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	w.Header().Set("ETag", etag)
+	writeJSON(w, http.StatusOK, entry)
 }
 
 func (h *Handler) readLibrary(w http.ResponseWriter, r *http.Request) {
