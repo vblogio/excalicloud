@@ -13,6 +13,7 @@
 //	GET    /api/library  /  PUT /api/library      bibliothèque Excalidraw
 //	GET    /api/settings / PUT {"title":"..."}    personnalisation (titre, logo)
 //	GET    /api/logo  /  PUT (image/png)  /  DELETE   logo 64x64
+//	GET    /api/update                    dernière version d'Excalidraw sur npm
 package api
 
 import (
@@ -23,12 +24,14 @@ import (
 	"net/http"
 
 	"github.com/vblogio/excalidraw-go/internal/storage"
+	"github.com/vblogio/excalidraw-go/internal/update"
 )
 
 // Handler regroupe les routes de l'API.
 type Handler struct {
 	Store   *storage.Store
-	MaxBody int64 // taille max d'un schéma (images embarquées comprises)
+	MaxBody int64           // taille max d'un schéma (images embarquées comprises)
+	Update  *update.Checker // nil : vérification des mises à jour désactivée
 }
 
 // Register enregistre les routes sur mux (motifs Go 1.22+).
@@ -51,6 +54,9 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/logo", h.readLogo)
 	mux.HandleFunc("PUT /api/logo", h.writeLogo)
 	mux.HandleFunc("DELETE /api/logo", h.deleteLogo)
+	mux.HandleFunc("GET /api/update", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, h.Update.Status())
+	})
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "route inconnue")
 	})

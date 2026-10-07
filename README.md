@@ -39,23 +39,40 @@ docker compose up -d --build
 | `DATA_DIR`      | `/data`  | Racine des schémas                                                |
 | `MAX_BODY_MB`   | `50`     | Taille max d'un schéma (images embarquées en base64 comprises)    |
 | `AUTH_USER` / `AUTH_PASSWORD` | vide | Active une authentification HTTP Basic si les deux sont définis |
+| `UPDATE_CHECK`  | `true`   | Interroge `registry.npmjs.org` pour signaler une nouvelle version d'Excalidraw (`false` : désactivé) |
+| `UPDATE_CHECK_INTERVAL` | `12h` | Intervalle entre deux vérifications (durée Go, minimum `1m`) |
+| `NPM_REGISTRY`  | `https://registry.npmjs.org` | Registre interrogé (miroir interne possible) |
+| `EXCALIDRAW_VERSION` (build) | vide | Version d'Excalidraw imposée à la construction de l'image ; vide = celle de `package-lock.json` |
 
 Bind mount au lieu du volume nommé : `- ./data:/data` puis `chown -R 65532:65532 ./data`.
 
 ## Utilisation
 
 - **＋ Schéma / ＋ Dossier** : création dans le dossier courant.
-- **Vignettes / liste** : bouton ▦ / ☰ à droite de la recherche (choix mémorisé par navigateur).
+- **Vignettes / liste** : sélecteur à droite de la recherche (choix mémorisé par navigateur).
 - **⋯** sur un élément : renommer, déplacer, dupliquer, télécharger, supprimer.
 - **Sélection multiple** : case à cocher (au survol, toujours visible sur écran tactile), `Ctrl/Cmd+clic`, `Maj+clic` pour une plage, `Ctrl+A` pour tout. Tant qu'une sélection est en cours, un simple clic/tap ajoute ou retire un élément. La barre de sélection propose *Déplacer…* et la mise à la corbeille ; `Échap` annule, `Suppr` supprime.
 - **Déplacer** : glisser-déposer (souris) d'un élément — ou de toute la sélection — sur un dossier, sur `..` ou sur le fil d'Ariane ; ou *Déplacer…* qui ouvre un sélecteur de dossier (navigation, création de dossier), utilisable au doigt. En cas de conflit de nom dans la destination, les autres éléments sont tout de même déplacés et les échecs listés.
-- **Importer** : envoie un ou plusieurs `.excalidraw` locaux dans le dossier courant.
+- **Importer** : envoie un ou plusieurs `.excalidraw` locaux dans le dossier courant. Le bouton voisin importe un **dossier complet**.
+- **Glisser-déposer depuis le poste** : des fichiers ou des dossiers entiers déposés sur l'explorateur sont importés dans le dossier courant (ou dans le dossier survolé). L'arborescence est recréée, seuls les `.excalidraw` sont importés, les fichiers et dossiers cachés (`.git`, `.DS_Store`) sont ignorés et un schéma déjà présent n'est jamais écrasé. Un bilan s'affiche (détail au survol).
 - **Sauvegarde** : automatique 1,5 s après la dernière modification, immédiate avec `Ctrl/Cmd+S`. Le statut (Modifié / Enregistrement… / Enregistré) est affiché dans la barre du haut.
 - **Lien direct** : l'URL `http://hôte:8080/#/dossier/schema.excalidraw` ouvre le schéma.
 - **Bibliothèque** Excalidraw : persistée côté serveur, partagée entre tous les schémas.
 - **Largeur de l'explorateur** (bureau) : glisser la poignée entre l'explorateur et le canevas ; flèches ←/→ au clavier quand elle a le focus (Maj : pas plus grand), double-clic pour revenir à 330 px. Mémorisée par navigateur.
+- **Style** : l'explorateur et la barre du haut reprennent les couleurs, la police, les rayons et les tailles de boutons d'Excalidraw (jetons `--ex-*` en tête de `styles.css`), en clair comme en sombre.
+- **Mise à jour d'Excalidraw** : quand une version plus récente que celle embarquée est publiée sur npm, une icône apparaît à droite de la barre du haut ; un clic affiche les deux versions et la commande de reconstruction (voir *Mettre à jour Excalidraw*).
 - **Mode clair/sombre** : bouton ☀/☾ à droite de la barre du haut ; s'applique à l'interface et au canevas Excalidraw, reste synchronisé avec le choix du menu d'Excalidraw. Mémorisé par navigateur.
 - **Titre et logo** : bouton ✎ à droite de la barre (ou clic sur le titre). Le titre et le logo sont communs à tous les utilisateurs. Le logo (PNG, 5 Mo max) est recadré au centre, réduit à 64×64 px côté serveur et affiché dans un masque rond (34 px dans la barre, net sur écran HiDPI ; taille réglable via `--logo-size` dans `styles.css`).
+
+### Mettre à jour Excalidraw
+
+La version d'Excalidraw est figée au build (`frontend/package-lock.json`). Le serveur interroge le registre npm (`/api/update`, toutes les 12 h par défaut) et l'interface compare la dernière version publiée à celle embarquée. Pour reconstruire avec la nouvelle version :
+
+```bash
+EXCALIDRAW_VERSION=0.18.2 docker compose up -d --build   # ou EXCALIDRAW_VERSION=… dans .env
+```
+
+Les versions `0.x` d'Excalidraw peuvent contenir des changements incompatibles : tester l'image avant de la mettre en service. Pour figer durablement la nouvelle version dans le dépôt : `cd frontend && npm install --save-exact @excalidraw/excalidraw@0.18.2`, puis commiter `package.json` et `package-lock.json`. Sans accès Internet, aucune icône n'est affichée.
 
 ### Miniatures
 
@@ -93,6 +110,7 @@ Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants co
 | GET | `/api/logo?v=<version>` | | PNG 64×64 ; `404` sans logo |
 | PUT | `/api/logo` | PNG (5 Mo, 8192×8192 px max) | réglages ; image recadrée et ré-encodée |
 | DELETE | `/api/logo` | | réglages |
+| GET | `/api/update` | | `{"enabled","latest","checkedAt"}` |
 | GET | `/healthz` | | `ok` (hors authentification) |
 
 `Entry` = `{"name","path","isDir","size","modTime"}`.

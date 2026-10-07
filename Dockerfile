@@ -5,6 +5,13 @@ FROM node:22-alpine AS frontend
 WORKDIR /src/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
+# Version d'Excalidraw imposée au build (vide : celle de package-lock.json).
+# Ex. : EXCALIDRAW_VERSION=0.18.2 docker compose up -d --build
+ARG EXCALIDRAW_VERSION=
+RUN --mount=type=cache,target=/root/.npm \
+    if [ -n "$EXCALIDRAW_VERSION" ]; then \
+      npm install --no-audit --no-fund --save-exact "@excalidraw/excalidraw@$EXCALIDRAW_VERSION"; \
+    fi
 COPY frontend/ ./
 RUN npm run build
 

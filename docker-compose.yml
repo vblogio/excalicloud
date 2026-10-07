@@ -1,6 +1,11 @@
 services:
   excalidraw:
-    build: .
+    build:
+      context: .
+      args:
+        # Vide : version figée dans frontend/package-lock.json. Renseignée (dans .env
+        # ou en ligne de commande), l'image est reconstruite avec cette version.
+        EXCALIDRAW_VERSION: ${EXCALIDRAW_VERSION:-}
     image: excalidraw-go:local
     container_name: excalidraw-go
     restart: unless-stopped
@@ -13,6 +18,9 @@ services:
       AUTH_PASSWORD: ${AUTH_PASSWORD:-}
       # Taille max d'un schéma (images embarquées en base64 comprises).
       MAX_BODY_MB: ${MAX_BODY_MB:-50}
+      # Icône « mise à jour d'Excalidraw disponible » (interroge registry.npmjs.org).
+      UPDATE_CHECK: ${UPDATE_CHECK:-true}
+      UPDATE_CHECK_INTERVAL: ${UPDATE_CHECK_INTERVAL:-12h}
     volumes:
       # Volume nommé : les droits (uid 65532) sont hérités de l'image.
       # Pour un bind mount (ex. ./data:/data), faire `chown -R 65532:65532 ./data`.

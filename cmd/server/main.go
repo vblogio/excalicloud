@@ -18,6 +18,7 @@ import (
 
 	"github.com/vblogio/excalidraw-go/internal/api"
 	"github.com/vblogio/excalidraw-go/internal/storage"
+	"github.com/vblogio/excalidraw-go/internal/update"
 	"github.com/vblogio/excalidraw-go/web"
 )
 
@@ -49,8 +50,27 @@ func main() {
 		os.Exit(1)
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Surveillance des nouvelles versions d'Excalidraw (UPDATE_CHECK=false pour désactiver).
+	var checker *update.Checker
+	if b, err := strconv.ParseBool(env("UPDATE_CHECK", "true")); err != nil || b {
+		interval, err := time.ParseDuration(env("UPDATE_CHECK_INTERVAL", "12h"))
+		if err != nil || interval < time.Minute {
+			slog.Error("UPDATE_CHECK_INTERVAL invalide (ex. 12h, minimum 1m)")
+			os.Exit(1)
+		}
+		checker = &update.Checker{
+			Registry: env("NPM_REGISTRY", "https://registry.npmjs.org"),
+			Interval: interval,
+			Client:   &http.Client{}, // respecte HTTPS_PROXY / NO_PROXY
+		}
+		go checker.Run(ctx)
+	}
+
 	mux := http.NewServeMux()
-	(&api.Handler{Store: store, MaxBody: maxMB << 20}).Register(mux)
+	(&api.Handler{Store: store, MaxBody: maxMB << 20, Update: checker}).Register(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})
@@ -70,8 +90,6 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	go func() {
 		slog.Info("démarrage", "addr", addr, "data", dataDir)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
