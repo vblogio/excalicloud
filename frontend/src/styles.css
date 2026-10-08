@@ -1345,3 +1345,66 @@ button.chip.on,
     display: inline-flex;
   }
 }
+
+/* Entrées propres à l'utilisateur en tête de la racine : Favoris et Personnel. */
+.icon.special.favoris {
+  color: #f59f00;
+}
+.icon.special.perso {
+  color: var(--accent);
+}
+.item.special > .row {
+  background: var(--ex-surface-mid);
+  border-radius: var(--ex-radius-lg);
+}
+/* Favori dont l'original a disparu : barré, seul « Retirer » reste possible. */
+.item.broken .label {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+/* Utilisateur connecté (barre de titre) : cartouche du mode + identifiant. */
+.whoami {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 260px;
+  margin: 0 4px;
+  font-size: 12px;
+}
+.auth-tag {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font: 600 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.auth-tag.oidc {
+  color: #0b7285;
+  background: #e3fafc;
+}
+.auth-tag.local {
+  color: #e67700;
+  background: #fff4e6;
+}
+:root[data-theme="dark"] .auth-tag.oidc {
+  color: #66d9e8;
+  background: rgb(102 217 232 / 0.12);
+}
+:root[data-theme="dark"] .auth-tag.local {
+  color: #ffc078;
+  background: rgb(255 192 120 / 0.12);
+}
+.user-id {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .user-id {
+    display: none;
+  }
+}

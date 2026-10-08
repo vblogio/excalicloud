@@ -203,6 +203,14 @@ export const EyeIcon = icon(
 /** Punaise : panneau épinglé ou flottant (comme le bouton d'ancrage des panneaux d'Excalidraw). */
 export const PinIcon = icon(<path d="M15 4.5l-4 4-4 1.5-1.5 1.5 7 7 1.5-1.5 1.5-4 4-4M9 15l-4.5 4.5M14.5 4 20 9.5" />);
 
+/** Espace personnel de l'utilisateur. */
+export const UserIcon = icon(
+  <>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+  </>,
+);
+
 export const LogoutIcon = icon(
   <>
     <path d="M14 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-2" />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, basename, dirname, join, type Entry } from "./api";
+import { api, basename, dirname, join, label, type Entry } from "./api";
 import { FolderIcon, FolderPlusIcon } from "./icons";
 
 interface Props {
@@ -21,7 +21,7 @@ export function MoveDialog({ paths, startDir, onCancel, onConfirm }: Props) {
     setError(null);
     api
       .list(dir)
-      .then((es) => live && setFolders(es.filter((e) => e.isDir)))
+      .then((es) => live && setFolders(es.filter((e) => e.isDir && e.special !== "favoris")))
       .catch((e) => live && setError(e.message));
     return () => {
       live = false;
@@ -63,7 +63,7 @@ export function MoveDialog({ paths, startDir, onCancel, onConfirm }: Props) {
             return (
               <span key={p}>
                 <span className="muted"> / </span>
-                <button onClick={() => setDir(p)}>{c}</button>
+                <button onClick={() => setDir(p)}>{label(c)}</button>
               </span>
             );
           })}

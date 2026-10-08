@@ -5,8 +5,11 @@ import {
   ApiError,
   basename,
   dirname,
+  displayPath,
   EXT,
+  inFavoris,
   join,
+  label,
   stripExt,
   withExt,
   type Entry,
@@ -33,6 +36,7 @@ import {
   TrashIcon,
   UpIcon,
   UploadIcon,
+  UserIcon,
 } from "./icons";
 import { collectDrop, collectFiles, hasFiles, type Collected } from "./importer";
 import { MoveDialog } from "./MoveDialog";
@@ -107,14 +111,16 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   const [fileDrag, setFileDrag] = useState(false); // fichiers du système survolant l'explorateur
   const [tags, setTags] = useState<TagCount[]>([]);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
-  const [favOnly, setFavOnly] = useState(false);
   const [tagging, setTagging] = useState<Entry[] | null>(null); // éléments du dialogue « Tags »
   const fileInput = useRef<HTMLInputElement>(null);
   const dirInput = useRef<HTMLInputElement>(null);
+  const stay = useRef<string | null>(null); // schéma ouvert depuis Favoris : on reste dans Favoris
 
   const list = results ?? entries;
-  const filter = { tag: tagFilter, fav: favOnly };
-  const filtering = query.trim() !== "" || tagFilter !== null || favOnly;
+  const filter = { tag: tagFilter };
+  const filtering = query.trim() !== "" || tagFilter !== null;
+  // Dossier Favoris : des liens vers les originaux, ni création ni déplacement.
+  const favView = !results && inFavoris(dir);
 
   const guard = useCallback(async (fn: () => Promise<unknown>) => {
     setError(null);
@@ -156,7 +162,8 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
 
   // Suit le dossier du schéma ouvert (lien direct, création, déplacement).
   useEffect(() => {
-    if (current) setDir(dirname(current));
+    if (current && current !== stay.current) setDir(dirname(current));
+    stay.current = null;
   }, [current]);
 
   // Recherche (texte, tag, favoris) avec anti-rebond.
@@ -168,7 +175,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
     const t = setTimeout(() => guard(async () => setResults(await api.search(query, filter))), 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, tagFilter, favOnly, guard, refreshKey]);
+  }, [query, tagFilter, guard, refreshKey]);
 
   /** Recharge le dossier et, si une recherche est affichée, ses résultats. */
   const reload = async () => {
@@ -201,7 +208,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   };
 
   const selectRange = (path: string) => {
-    const paths = list.map((e) => e.path);
+    const paths = selectable.map((e) => e.path);
     const a = anchor ? paths.indexOf(anchor) : -1;
     const b = paths.indexOf(path);
     if (a < 0 || b < 0) return toggle(path);
@@ -209,16 +216,23 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
     setSelected((s) => new Set([...s, ...paths.slice(lo, hi + 1)]));
   };
 
-  const selectAll = () => setSelected(new Set(list.map((e) => e.path)));
+  const selectable = list.filter((e) => !e.special);
+  const selectAll = () => setSelected(new Set(selectable.map((e) => e.path)));
 
   const onItemClick = (ev: MouseEvent, e: Entry) => {
-    if (ev.shiftKey) return selectRange(e.path);
-    // Ctrl/Cmd+clic, ou clic quand une sélection est en cours (mode sélection tactile).
-    if (ev.ctrlKey || ev.metaKey || selected.size > 0) return toggle(e.path);
+    if (!e.special) {
+      if (ev.shiftKey) return selectRange(e.path);
+      // Ctrl/Cmd+clic, ou clic quand une sélection est en cours (mode sélection tactile).
+      if (ev.ctrlKey || ev.metaKey || selected.size > 0) return toggle(e.path);
+    }
+    if (e.broken) return;
     if (e.isDir) {
       setQuery("");
       setDir(e.path);
-    } else onOpen(e.path);
+    } else {
+      if (favView && e.path !== current) stay.current = e.path;
+      onOpen(e.path);
+    }
   };
 
   const onKeyDown = (ev: KeyboardEvent) => {
@@ -288,14 +302,23 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   /** Favoris : la sélection devient favorite, sauf si elle l'est déjà entièrement. */
   const toggleFavorite = (items: Entry[]) =>
     guard(async () => {
-      const fav = !items.every((e) => e.favorite);
+      const files = items.filter((e) => !e.isDir);
+      if (files.length === 0) return;
+      const fav = favView ? false : !files.every((e) => e.favorite);
       await api.setFavorite(
-        items.map((e) => e.path),
+        files.map((e) => e.path),
         fav,
       );
       setMenuFor(null);
+      if (favView) clearSelection();
       await reload();
     });
+
+  /** Dépôt sur Favoris : les schémas déposés y sont ajoutés (lien, pas déplacement). */
+  const addFavorites = (paths: string[]) =>
+    toggleFavorite(
+      paths.map((p) => list.find((e) => e.path === p) ?? { name: basename(p), path: p, isDir: false, size: 0, modTime: "" }),
+    );
 
   const duplicate = (e: Entry) =>
     guard(async () => {
@@ -314,6 +337,12 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
 
   const removeMany = (paths: string[]) =>
     guard(async () => {
+      // Dans Favoris, « Supprimer » retire le lien ; l'original reste en place.
+      if (favView) {
+        await api.setFavorite(paths, false);
+        clearSelection();
+        return reload();
+      }
       const one = list.find((e) => e.path === paths[0]);
       const what =
         paths.length > 1
@@ -383,7 +412,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
     // Glisser un élément sélectionné emporte toute la sélection.
     const paths = selected.has(e.path) ? [...selected] : [e.path];
     ev.dataTransfer.setData(DND_TYPE, JSON.stringify(paths));
-    ev.dataTransfer.effectAllowed = "move";
+    ev.dataTransfer.effectAllowed = "linkMove";
     if (paths.length > 1) {
       const ghost = document.createElement("div");
       ghost.className = "drag-ghost";
@@ -400,8 +429,9 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
     onDragOver: (ev: DragEvent) => {
       const external = hasFiles(ev.dataTransfer);
       if (!external && !ev.dataTransfer.types.includes(DND_TYPE)) return;
+      if (external && inFavoris(targetDir)) return; // pas d'import dans Favoris
       ev.preventDefault();
-      ev.dataTransfer.dropEffect = external ? "copy" : "move";
+      ev.dataTransfer.dropEffect = external ? "copy" : inFavoris(targetDir) ? "link" : "move";
       setDropTarget(targetDir);
     },
     onDragLeave: () => setDropTarget(null),
@@ -417,19 +447,21 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
       } catch {
         return;
       }
-      moveMany(paths, targetDir);
+      if (inFavoris(targetDir)) addFavorites(paths);
+      else moveMany(paths, targetDir);
     },
   });
 
   // --- Rendu ---------------------------------------------------------------
 
   const crumbs = dir ? dir.split("/") : [];
-  const importDir = results ? "" : dir; // pendant une recherche, le dossier courant n'est pas affiché
+  const importDir = results || favView ? "" : dir; // pendant une recherche, le dossier courant n'est pas affiché
+  const where = (p: string) => displayPath(dirname(p)) || "Racine";
 
   // Dépôt n'importe où dans l'explorateur : import dans le dossier courant.
   const zoneProps = {
     onDragOver: (ev: DragEvent) => {
-      if (!hasFiles(ev.dataTransfer)) return;
+      if (favView || !hasFiles(ev.dataTransfer)) return;
       ev.preventDefault();
       ev.dataTransfer.dropEffect = "copy";
       setFileDrag(true);
@@ -438,21 +470,54 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
       if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) setFileDrag(false);
     },
     onDrop: (ev: DragEvent) => {
-      if (!hasFiles(ev.dataTransfer)) return;
+      if (favView || !hasFiles(ev.dataTransfer)) return;
       ev.preventDefault();
       setFileDrag(false);
       importTree(collectDrop(ev.dataTransfer), importDir);
     },
   };
 
+  const big = view === "grid" ? 40 : 20;
   const icon = (e: Entry) =>
-    e.isDir ? (
+    e.special ? (
+      <span className={`icon special ${e.special}`} aria-hidden>
+        {e.special === "favoris" ? <StarFilledIcon size={big} /> : <UserIcon size={big} />}
+      </span>
+    ) : e.broken ? (
       <span className="icon folder" aria-hidden>
-        <FolderIcon size={view === "grid" ? 40 : 20} />
+        <StarIcon size={big} />
+      </span>
+    ) : e.isDir ? (
+      <span className="icon folder" aria-hidden>
+        <FolderIcon size={big} />
       </span>
     ) : (
       <Thumb path={e.path} version={e.modTime} />
     );
+
+  // Dans Favoris : actions sur l'original, retrait du lien à la place de la suppression.
+  const favActions = (e: Entry) => (
+    <div className="actions">
+      {!e.broken && (
+        <>
+          <button onClick={() => setDir(dirname(e.path))}>Ouvrir l'emplacement</button>
+          <button onClick={() => onHistory(e.path)}>Historique…</button>
+          <button onClick={() => onShare(e.path)}>Partager…</button>
+          <button onClick={() => setTagging([e])}>
+            <TagIcon />
+            Tags…
+          </button>
+          <a href={api.downloadUrl(e.path)} download={e.name}>
+            Télécharger
+          </a>
+        </>
+      )}
+      <button className="danger" onClick={() => removeMany([e.path])}>
+        <StarIcon />
+        Retirer des favoris
+      </button>
+    </div>
+  );
 
   const actions = (e: Entry) => (
     <div className="actions">
@@ -461,10 +526,12 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
       {!e.isDir && <button onClick={() => duplicate(e)}>Dupliquer</button>}
       {!e.isDir && <button onClick={() => onHistory(e.path)}>Historique…</button>}
       {!e.isDir && <button onClick={() => onShare(e.path)}>Partager…</button>}
-      <button onClick={() => toggleFavorite([e])}>
-        {e.favorite ? <StarFilledIcon /> : <StarIcon />}
-        {e.favorite ? "Retirer des favoris" : "Favori"}
-      </button>
+      {!e.isDir && (
+        <button onClick={() => toggleFavorite([e])}>
+          {e.favorite ? <StarFilledIcon /> : <StarIcon />}
+          {e.favorite ? "Retirer des favoris" : "Favori"}
+        </button>
+      )}
       <button onClick={() => setTagging([e])}>
         <TagIcon />
         Tags…
@@ -488,16 +555,19 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
       e.isDir ? "dir" : "file",
       e.path === current ? "active" : "",
       isSel ? "selected" : "",
+      e.special ? "special" : "",
+      e.broken ? "broken" : "",
       dropTarget === e.path ? "drop" : "",
     ].join(" ");
     return [
       <li key={e.path} className={cls}>
         <div
           className="row"
-          draggable
+          draggable={!e.special && !favView}
           onDragStart={(ev) => onDragStart(ev, e)}
           {...(e.isDir ? dropProps(e.path) : {})}
         >
+          {!e.special && (
           <input
             type="checkbox"
             className="check"
@@ -512,7 +582,12 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
             }}
             onChange={() => toggle(e.path)}
           />
-          <button className="name" onClick={(ev) => onItemClick(ev, e)} title={e.path}>
+          )}
+          <button
+            className="name"
+            onClick={(ev) => onItemClick(ev, e)}
+            title={e.broken ? "Original introuvable : retirer ce favori" : displayPath(e.path)}
+          >
             {icon(e)}
             <span className="label">
               {e.favorite && (
@@ -521,7 +596,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
                 </span>
               )}
               {e.isDir ? e.name : stripExt(e.name)}
-              {results && <small className="muted where"> {dirname(e.path) || "/"}</small>}
+              {(results || (favView && !e.broken)) && <small className="muted where"> {where(e.path)}</small>}
               {e.snippet && <small className="snippet">{e.snippet}</small>}
             </span>
           </button>
@@ -540,6 +615,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
             </span>
           )}
           {!e.isDir && view === "list" && <span className="meta muted">{fmtDate(e.modTime)}</span>}
+          {!e.special && (
           <button
             className="icon-btn more"
             aria-label="Actions"
@@ -548,13 +624,14 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
           >
             <DotsIcon />
           </button>
+          )}
         </div>
-        {view === "list" && menuFor === e.path && actions(e)}
+        {view === "list" && menuFor === e.path && (favView ? favActions(e) : actions(e))}
       </li>,
       // En grille, le menu occupe toute la largeur sous la vignette.
       view === "grid" && menuFor === e.path && (
         <li key={`${e.path}#menu`} className="menu-row">
-          {actions(e)}
+          {favView ? favActions(e) : actions(e)}
         </li>
       ),
     ];
@@ -563,17 +640,18 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   return (
     <div className={`explorer ${fileDrag ? "file-drag" : ""}`} onKeyDown={onKeyDown} {...zoneProps}>
       <div className="toolbar">
-        <button className="ex-btn" onClick={newDrawing} title="Nouveau schéma">
+        <button className="ex-btn" onClick={newDrawing} title="Nouveau schéma" disabled={favView}>
           <FilePlusIcon />
           <span>Schéma</span>
         </button>
-        <button className="ex-btn" onClick={newFolder} title="Nouveau dossier">
+        <button className="ex-btn" onClick={newFolder} title="Nouveau dossier" disabled={favView}>
           <FolderPlusIcon />
           <span>Dossier</span>
         </button>
         <button
           className="ex-btn"
           onClick={() => fileInput.current?.click()}
+          disabled={favView}
           title="Importer des fichiers .excalidraw (ou glisser-déposer fichiers et dossiers ici)"
         >
           <UploadIcon />
@@ -582,6 +660,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
         <button
           className="ex-btn square"
           onClick={() => dirInput.current?.click()}
+          disabled={favView}
           title="Importer un dossier complet (arborescence recréée, seuls les .excalidraw sont importés)"
           aria-label="Importer un dossier"
         >
@@ -648,15 +727,6 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
       </div>
 
       <div className="filters" role="group" aria-label="Filtres">
-        <button
-          className={`chip ${favOnly ? "on" : ""}`}
-          aria-pressed={favOnly}
-          onClick={() => setFavOnly((f) => !f)}
-          title="Favoris de toute l'arborescence"
-        >
-          {favOnly ? <StarFilledIcon size={12} /> : <StarIcon size={12} />}
-          Favoris
-        </button>
         {tags.map((t) => (
           <button
             key={t.name}
@@ -682,7 +752,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
               <span key={p}>
                 <span className="muted"> / </span>
                 <button className={dropTarget === p ? "drop" : ""} onClick={() => setDir(p)} {...dropProps(p)}>
-                  {c}
+                  {label(c)}
                 </button>
               </span>
             );
@@ -698,16 +768,16 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
           <span className="count">{plural(selected.size, "sélectionné")}</span>
           <button
             className="icon-btn"
-            onClick={selected.size === list.length ? clearSelection : selectAll}
-            title={selected.size === list.length ? "Tout désélectionner" : "Tout sélectionner (Ctrl+A)"}
-            aria-label={selected.size === list.length ? "Tout désélectionner" : "Tout sélectionner"}
+            onClick={selected.size === selectable.length ? clearSelection : selectAll}
+            title={selected.size === selectable.length ? "Tout désélectionner" : "Tout sélectionner (Ctrl+A)"}
+            aria-label={selected.size === selectable.length ? "Tout désélectionner" : "Tout sélectionner"}
           >
-            {selected.size === list.length ? <DeselectIcon /> : <SelectAllIcon />}
+            {selected.size === selectable.length ? <DeselectIcon /> : <SelectAllIcon />}
           </button>
           <button
             className="icon-btn"
             onClick={() => toggleFavorite(list.filter((e) => selected.has(e.path)))}
-            title="Favoris (ajouter ou retirer)"
+            title={favView ? "Retirer des favoris" : "Favoris (ajouter ou retirer)"}
             aria-label="Favoris"
           >
             <StarIcon />
@@ -720,11 +790,18 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
           >
             <TagIcon />
           </button>
-          <button className="ex-btn" onClick={() => setMoving([...selected])}>
-            <MoveIcon />
-            <span>Déplacer…</span>
-          </button>
-          <button className="icon-btn danger" onClick={() => removeMany([...selected])} title="Mettre à la corbeille (Suppr)" aria-label="Supprimer">
+          {!favView && (
+            <button className="ex-btn" onClick={() => setMoving([...selected])}>
+              <MoveIcon />
+              <span>Déplacer…</span>
+            </button>
+          )}
+          <button
+            className="icon-btn danger"
+            onClick={() => removeMany([...selected])}
+            title={favView ? "Retirer des favoris (Suppr)" : "Mettre à la corbeille (Suppr)"}
+            aria-label={favView ? "Retirer des favoris" : "Supprimer"}
+          >
             <TrashIcon />
           </button>
         </div>
@@ -756,13 +833,17 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
           </li>
         )}
         {list.flatMap(item)}
-        {list.length === 0 && <li className="muted empty">{results ? "Aucun résultat" : "Dossier vide"}</li>}
+        {list.length === 0 && (
+          <li className="muted empty">
+            {results ? "Aucun résultat" : favView ? "Aucun favori : étoile ou glisser-déposer un schéma ici" : "Dossier vide"}
+          </li>
+        )}
       </ul>
 
       {fileDrag && (
         <div className="drop-hint" aria-hidden>
           <FolderUploadIcon size={28} />
-          <span>Déposer pour importer dans « {importDir ? basename(importDir) : "Racine"} »</span>
+          <span>Déposer pour importer dans « {importDir ? label(basename(importDir)) : "Racine"} »</span>
           <small>Les dossiers sont recréés · seuls les .excalidraw sont importés</small>
         </div>
       )}
@@ -779,7 +860,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
       {moving && (
         <MoveDialog
           paths={moving}
-          startDir={results ? "" : dir}
+          startDir={importDir}
           onCancel={() => setMoving(null)}
           onConfirm={(target) => moveMany(moving, target)}
         />

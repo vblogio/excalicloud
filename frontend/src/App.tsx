@@ -14,7 +14,7 @@ import type {
   LibraryItems,
 } from "@excalidraw/excalidraw/types";
 import type { OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
-import { api, ApiError, basename, stripExt, type Settings } from "./api";
+import { api, ApiError, basename, displayPath, stripExt, type Settings } from "./api";
 import { Explorer } from "./Explorer";
 import { CloseIcon, HistoryIcon, MenuIcon, MoonIcon, PinIcon, SaveIcon, SettingsIcon, ShareIcon, SunIcon, UpdateIcon } from "./icons";
 import { ShareDialog } from "./ShareDialog";
@@ -539,7 +539,7 @@ export default function App() {
           <span className="brand-title">{appTitle}</span>
         </button>
         {scene ? (
-          <span className="title" title={scene.path}>
+          <span className="title" title={displayPath(scene.path)}>
             <span className="sep muted" aria-hidden>
               /
             </span>

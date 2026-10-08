@@ -8,6 +8,12 @@ export interface Entry {
   modTime: string;
   tags?: string[];
   favorite?: boolean;
+  /** Entrée virtuelle de la racine : "favoris" ou "perso" (espace personnel). */
+  special?: "favoris" | "perso";
+  /** Dans le dossier Favoris : nom du lien (le chemin est celui de l'original). */
+  link?: string;
+  /** Favori dont l'original a disparu (chemin .favoris/<lien>, à retirer). */
+  broken?: boolean;
 }
 
 export interface TagCount {
@@ -74,11 +80,12 @@ export interface PublicScene {
   scene: { elements?: unknown[]; appState?: Record<string, unknown>; files?: Record<string, unknown> };
 }
 
-/** Session courante (GET /api/me) ; logout présent en mode OIDC. */
+/** Session courante (GET /api/me) ; logout présent en mode OIDC, id = dossier de l'utilisateur. */
 export interface Me {
   mode: "none" | "local" | "oidc";
   user?: { sub: string; name: string; email?: string };
   logout?: string;
+  id: string;
 }
 
 export class ApiError extends Error {
@@ -247,6 +254,16 @@ export const api = {
 export const dirname = (p: string) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
 export const basename = (p: string) => p.slice(p.lastIndexOf("/") + 1);
 export const join = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
+
+// Dossiers propres à l'utilisateur connecté (voir internal/storage/spaces.go).
+export const PERSO = ".perso";
+export const FAVORIS = ".favoris";
+const SPECIAL_LABELS: Record<string, string> = { [PERSO]: "Personnel", [FAVORIS]: "Favoris" };
+/** Libellé d'un composant de chemin (".perso" → "Personnel"). */
+export const label = (part: string) => SPECIAL_LABELS[part] ?? part;
+/** Chemin affiché : "Personnel/projets" pour ".perso/projets". */
+export const displayPath = (p: string) => p.split("/").map(label).join("/");
+export const inFavoris = (p: string) => p === FAVORIS || p.startsWith(FAVORIS + "/");
 export const EXT = ".excalidraw";
 export const withExt = (name: string) => (name.toLowerCase().endsWith(EXT) ? name : name + EXT);
 export const stripExt = (name: string) =>
