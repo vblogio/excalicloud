@@ -74,6 +74,13 @@ export interface PublicScene {
   scene: { elements?: unknown[]; appState?: Record<string, unknown>; files?: Record<string, unknown> };
 }
 
+/** Session courante (GET /api/me) ; logout présent en mode OIDC. */
+export interface Me {
+  mode: "none" | "local" | "oidc";
+  user?: { sub: string; name: string; email?: string };
+  logout?: string;
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -83,6 +90,9 @@ export class ApiError extends Error {
 async function request(url: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(url, init);
   if (!res.ok) {
+    // Session OIDC expirée : reconnexion, puis retour sur la page courante.
+    const login = res.status === 401 ? res.headers.get("X-Auth-Login") : null;
+    if (login) location.assign(`${login}?next=${encodeURIComponent(location.pathname + location.search + location.hash)}`);
     let msg = res.statusText;
     try {
       msg = (await res.json()).error ?? msg;
@@ -103,6 +113,8 @@ const json = (body: unknown): RequestInit => ({
 
 export const api = {
   update: async (): Promise<UpdateStatus> => (await request("/api/update")).json(),
+
+  me: async (): Promise<Me> => (await request("/api/me")).json(),
 
   list: async (dir: string): Promise<Entry[]> =>
     (await request(`/api/list?path=${q(dir)}`)).json(),

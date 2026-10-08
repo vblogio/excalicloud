@@ -4,7 +4,9 @@ package main
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net"
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	"github.com/vblogio/excalidraw-go/internal/api"
+	"github.com/vblogio/excalidraw-go/internal/auth"
 	"github.com/vblogio/excalidraw-go/internal/storage"
 	"github.com/vblogio/excalidraw-go/internal/update"
 	"github.com/vblogio/excalidraw-go/web"
@@ -93,10 +96,10 @@ func main() {
 	})
 	mux.Handle("/", spa())
 
-	var h http.Handler = mux
-	if user, pass := os.Getenv("AUTH_USER"), os.Getenv("AUTH_PASSWORD"); user != "" && pass != "" {
-		h = basicAuth(h, user, pass, public)
-		slog.Info("authentification Basic activée", "user", user)
+	h, err := authenticate(ctx, mux, dataDir)
+	if err != nil {
+		slog.Error("authentification", "err", err)
+		os.Exit(1)
 	}
 	h = logRequests(securityHeaders(h))
 
@@ -120,6 +123,97 @@ func main() {
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
 	slog.Info("arrêt")
+}
+
+// authenticate protège mux selon AUTH_MODE :
+//   - local (défaut) : authentification Basic si AUTH_USER et AUTH_PASSWORD
+//     sont définis, sinon aucune (reverse proxy avec SSO, usage local) ;
+//   - oidc : connexion auprès d'un fournisseur OpenID Connect (variables OIDC_*).
+//
+// Dans les deux cas, /healthz, /s/<jeton> et /api/public/ restent publics.
+// GET /api/me décrit la session au frontend.
+func authenticate(ctx context.Context, mux *http.ServeMux, dataDir string) (http.Handler, error) {
+	me := auth.Me{Mode: "none"}
+	var h http.Handler = mux
+	switch mode := strings.ToLower(env("AUTH_MODE", "local")); mode {
+	case "local":
+		if user, pass := os.Getenv("AUTH_USER"), os.Getenv("AUTH_PASSWORD"); user != "" && pass != "" {
+			h = basicAuth(h, user, pass, public)
+			me = auth.Me{Mode: "local", User: &auth.User{Sub: user, Name: user}}
+			slog.Info("authentification locale (Basic) activée", "user", user)
+		} else {
+			slog.Warn("aucune authentification intégrée (AUTH_MODE=local sans AUTH_USER/AUTH_PASSWORD)")
+		}
+	case "oidc":
+		cfg, err := oidcConfig(dataDir)
+		if err != nil {
+			return nil, err
+		}
+		o, err := auth.NewOIDC(ctx, cfg)
+		if err != nil {
+			return nil, err
+		}
+		o.Register(mux)
+		h = o.Middleware(mux, public)
+		me.Mode = "oidc"
+		slog.Info("authentification OIDC activée", "issuer", cfg.Issuer, "client_id", cfg.ClientID,
+			"groups", cfg.AllowedGroups, "session_ttl", cfg.SessionTTL.String())
+	default:
+		return nil, fmt.Errorf("AUTH_MODE %q inconnu (local ou oidc)", mode)
+	}
+	mux.HandleFunc("GET /api/me", func(w http.ResponseWriter, r *http.Request) {
+		m := me
+		if u := auth.UserFrom(r.Context()); u != nil {
+			m.User, m.Logout = u, "/auth/logout"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		_ = json.NewEncoder(w).Encode(m)
+	})
+	return h, nil
+}
+
+// oidcConfig lit les variables OIDC_* et SESSION_*.
+func oidcConfig(dataDir string) (auth.Config, error) {
+	cfg := auth.Config{
+		Issuer:       os.Getenv("OIDC_ISSUER"),
+		ClientID:     os.Getenv("OIDC_CLIENT_ID"),
+		ClientSecret: os.Getenv("OIDC_CLIENT_SECRET"),
+		RedirectURL:  os.Getenv("OIDC_REDIRECT_URL"),
+		Scopes:       fields(env("OIDC_SCOPES", "openid profile email")),
+		GroupsClaim:  env("OIDC_GROUPS_CLAIM", "groups"),
+	}
+	// Secret client lu dans un fichier (secrets Docker) si OIDC_CLIENT_SECRET_FILE est défini.
+	if f := os.Getenv("OIDC_CLIENT_SECRET_FILE"); f != "" && cfg.ClientSecret == "" {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			return cfg, fmt.Errorf("OIDC_CLIENT_SECRET_FILE : %w", err)
+		}
+		cfg.ClientSecret = strings.TrimSpace(string(b))
+	}
+	if g := strings.TrimSpace(os.Getenv("OIDC_ALLOWED_GROUPS")); g != "" {
+		for _, s := range strings.Split(g, ",") {
+			if s = strings.TrimSpace(s); s != "" {
+				cfg.AllowedGroups = append(cfg.AllowedGroups, s)
+			}
+		}
+	}
+	var err error
+	if cfg.EndSession, err = strconv.ParseBool(env("OIDC_LOGOUT", "true")); err != nil {
+		return cfg, errors.New("OIDC_LOGOUT invalide (true ou false)")
+	}
+	if cfg.SessionTTL, err = time.ParseDuration(env("SESSION_TTL", "24h")); err != nil || cfg.SessionTTL < 5*time.Minute {
+		return cfg, errors.New("SESSION_TTL invalide (ex. 24h, minimum 5m)")
+	}
+	if cfg.Secret, err = auth.LoadSecret(os.Getenv("SESSION_SECRET"), dataDir); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
+}
+
+// fields découpe une liste séparée par des espaces ou des virgules.
+func fields(s string) []string {
+	return strings.FieldsFunc(s, func(r rune) bool { return r == ' ' || r == ',' })
 }
 
 func historyPolicy() (storage.HistoryPolicy, error) {

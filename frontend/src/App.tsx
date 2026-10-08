@@ -25,6 +25,7 @@ import { pendingVersion, useUpdateStatus } from "./update";
 import { storeThumb } from "./thumbs";
 import { fetchLibraryItems, libraryUrlFromHash, parseServerLibrary } from "./library";
 import { fitScene } from "./fit";
+import { UserMenu } from "./UserMenu";
 
 type Theme = "light" | "dark";
 type SaveState = "saved" | "dirty" | "saving" | "error";
@@ -533,6 +534,7 @@ export default function App() {
           >
             <SettingsIcon />
           </button>
+          <UserMenu beforeLogout={save} />
         </div>
       </header>
 

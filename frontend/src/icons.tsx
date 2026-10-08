@@ -199,3 +199,10 @@ export const EyeIcon = icon(
     <path d="M22 12c-2.67 4.67-6 7-10 7s-7.33-2.33-10-7c2.67-4.67 6-7 10-7s7.33 2.33 10 7" />
   </>,
 );
+
+export const LogoutIcon = icon(
+  <>
+    <path d="M14 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-2" />
+    <path d="M9 12h12l-3-3M18 15l3-3" />
+  </>,
+);
