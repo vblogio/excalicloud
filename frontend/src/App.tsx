@@ -2,7 +2,7 @@ import { type CSSProperties, useCallback, useEffect, useRef, useState } from "re
 import {
   Excalidraw,
   hashElementsVersion,
-  restoreLibraryItems,
+  mergeLibraryItems,
   serializeAsJSON,
   serializeLibraryAsJSON,
 } from "@excalidraw/excalidraw";
@@ -23,6 +23,7 @@ import { Splitter } from "./Splitter";
 import { SettingsDialog, DEFAULT_TITLE } from "./SettingsDialog";
 import { pendingVersion, useUpdateStatus } from "./update";
 import { storeThumb } from "./thumbs";
+import { fetchLibraryItems, libraryUrlFromHash, parseServerLibrary } from "./library";
 import { fitScene } from "./fit";
 
 type Theme = "light" | "dark";
@@ -37,6 +38,10 @@ interface Scene {
 const AUTOSAVE_MS = 1500;
 const isMobile = () => window.matchMedia("(max-width: 768px)").matches;
 const pathFromHash = () => decodeURIComponent(location.hash.replace(/^#\/?/, "")) || null;
+
+// « Ajouter à Excalidraw » sur libraries.excalidraw.com revient vers la fenêtre nommée
+// window.name : avec un nom propre à l'onglet, l'ajout arrive ici sans ouvrir d'onglet.
+if (!window.name) window.name = `excalicloud-${Math.random().toString(36).slice(2)}`;
 
 const load = (key: string) => {
   try {
@@ -105,6 +110,7 @@ export default function App() {
   const inflight = useRef<Promise<void>>(Promise.resolve());
   const libTimer = useRef<number>(undefined);
   const libJson = useRef(""); // dernier état connu côté serveur
+  const libMenuPending = useRef(false); // ouvrir la bibliothèque avec le prochain schéma
   const sceneSeq = useRef(0);
   const fitPending = useRef(false); // cadrage à faire au premier rendu du schéma ouvert
   const exTheme = useRef<string | null>(null); // dernier thème signalé par Excalidraw
@@ -195,6 +201,8 @@ export default function App() {
     async (path: string, opts: { skipFlush?: boolean } = {}) => {
       if (!opts.skipFlush) await save();
       setLoadError(null);
+      const showLibrary = libMenuPending.current;
+      libMenuPending.current = false;
       try {
         const { text, etag } = await api.read(path);
         const data = JSON.parse(text);
@@ -207,12 +215,17 @@ export default function App() {
           path,
           initialData: {
             elements: data.elements ?? [],
-            appState: { ...(data.appState ?? {}), theme },
+            appState: {
+              ...(data.appState ?? {}),
+              theme,
+              ...(showLibrary ? { openSidebar: { name: "default", tab: "library" } } : {}),
+            },
             files: data.files ?? {},
           },
         });
         setSaveState("saved");
         if (location.hash !== `#/${path}`) history.replaceState(null, "", `#/${encodeURI(path)}`);
+        store("lastScene", path);
         if (isMobile()) setDrawerOpen(false);
       } catch (e) {
         setLoadError(`Impossible d'ouvrir « ${path} » : ${e instanceof Error ? e.message : e}`);
@@ -240,18 +253,18 @@ export default function App() {
 
   // --- Effets globaux --------------------------------------------------------
 
-  // Bibliothèque partagée, chargée une fois.
-  useEffect(() => {
-    api
-      .readLibrary()
-      .then((lib) => {
-        const raw = lib as { libraryItems?: unknown; library?: unknown };
-        const items = restoreLibraryItems((raw.libraryItems ?? raw.library ?? []) as LibraryItems, "unpublished");
-        libJson.current = serializeLibraryAsJSON(items);
-        setLibrary(items);
-      })
-      .catch(() => setLibrary([]));
+  // Bibliothèque partagée entre tous les schémas, stockée côté serveur.
+  const readLibrary = useCallback(async () => {
+    const items = parseServerLibrary(await api.readLibrary());
+    libJson.current = serializeLibraryAsJSON(items);
+    return items;
   }, []);
+
+  useEffect(() => {
+    readLibrary()
+      .then((items) => setLibrary((cur) => cur ?? items))
+      .catch(() => setLibrary((cur) => cur ?? []));
+  }, [readLibrary]);
 
   const onLibraryChange = useCallback((items: LibraryItems) => {
     clearTimeout(libTimer.current);
@@ -259,13 +272,70 @@ export default function App() {
       const json = serializeLibraryAsJSON(items);
       if (json === libJson.current) return; // appel initial au montage
       libJson.current = json;
+      setLibrary(items); // reprise à l'ouverture du schéma suivant
       api.writeLibrary(json).catch(console.error);
     }, 500);
   }, []);
 
+  // Retour sur l'onglet : reprend la bibliothèque modifiée ailleurs (autre onglet,
+  // autre poste) pour ne pas l'écraser ensuite avec une copie périmée.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.hidden) return;
+      const before = libJson.current;
+      readLibrary()
+        .then((items) => {
+          if (libJson.current === before) return;
+          setLibrary(items);
+          excalidraw.current?.updateLibrary({ libraryItems: items });
+        })
+        .catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [readLibrary]);
+
+  /** Lien « Ajouter à Excalidraw » de libraries.excalidraw.com (#addLibrary=<url>&token=…). */
+  const addLibrary = useCallback(
+    async (url: string) => {
+      try {
+        const incoming = await fetchLibraryItems(url);
+        if (!confirm(`Ajouter ${incoming.length} élément(s) à la bibliothèque ?\n\n${decodeURIComponent(url)}`)) return;
+        const ex = excalidraw.current;
+        if (ex) {
+          // Schéma ouvert : fusion dans l'éditeur, onLibraryChange enregistre côté serveur.
+          await ex.updateLibrary({ libraryItems: incoming, merge: true, openLibraryMenu: true });
+          return;
+        }
+        const items = mergeLibraryItems(await readLibrary(), incoming);
+        const json = serializeLibraryAsJSON(items);
+        await api.writeLibrary(json);
+        libJson.current = json;
+        setLibrary(items);
+        // Onglet ouvert par le site des bibliothèques : on rouvre le dernier schéma.
+        const last = load("lastScene");
+        if (last) {
+          libMenuPending.current = true;
+          await openRef.current(last);
+        }
+      } catch (e) {
+        setLoadError(`Impossible d'ajouter la bibliothèque : ${e instanceof Error ? e.message : e}`);
+      }
+    },
+    [readLibrary],
+  );
+
   // Lien direct #/chemin/schema.excalidraw et navigation arrière/avant.
   useEffect(() => {
     const onHash = () => {
+      const lib = libraryUrlFromHash();
+      if (lib) {
+        // Le fragment addLibrary n'est pas un chemin de schéma : on le retire.
+        const cur = pathRef.current;
+        history.replaceState(null, "", cur ? `#/${encodeURI(cur)}` : location.pathname);
+        addLibrary(lib);
+        return;
+      }
       const p = pathFromHash();
       if (p && p !== pathRef.current) openFile(p);
     };
