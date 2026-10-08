@@ -1,6 +1,6 @@
 # excalidraw-go
 
-Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arborescence de dossiers, **vignettes des schémas**, création, renommage, **sélection et déplacement multiples** (glisser-déposer ou dialogue « Déplacer vers… »), duplication, suppression (corbeille), **recherche plein texte** (noms et contenu des schémas), **tags et favoris**, **partage en lecture seule par lien signé**, import/export de fichiers `.excalidraw`, sauvegarde automatique côté serveur, **historique des versions** avec comparaison visuelle et restauration. Interface web unique, responsive (l'explorateur devient un tiroir sur mobile).
+Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arborescence de dossiers, **vignettes des schémas**, création, renommage, **sélection et déplacement multiples** (glisser-déposer ou dialogue « Déplacer vers… »), duplication, suppression (corbeille), **recherche plein texte** (noms et contenu des schémas), **tags**, **espace personnel et favoris par utilisateur**, **partage en lecture seule par lien signé**, import/export de fichiers `.excalidraw`, sauvegarde automatique côté serveur, **historique des versions** avec comparaison visuelle et restauration. Interface web unique, responsive (l'explorateur devient un tiroir sur mobile).
 
 - **Backend** : Go 1.24, bibliothèque standard uniquement (aucune dépendance externe), API REST/JSON, stockage en fichiers `.excalidraw` sur un volume.
 - **Frontend** : React 19 + composant officiel [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw) 0.18.1 (licence MIT), build Vite **embarqué dans le binaire Go** (`embed`).
@@ -22,7 +22,9 @@ Navigateur ──HTTP──▶ conteneur excalidraw-go (:8080, uid 65532, rootfs
                          ├─ .library.excalidrawlib          ← bibliothèque partagée
                          ├─ .settings.json, .logo.png       ← titre et logo de la barre
                          ├─ .thumbs/projets/réseau/sdn.excalidraw.png ← miniatures (régénérables)
-                         ├─ .meta.json                       ← tags et favoris
+                         ├─ .meta.json                       ← tags (et anciens favoris communs)
+                         ├─ .users/<id>/home/...             ← espace personnel (même structure : .history, .thumbs, .trash…)
+                         ├─ .users/<id>/favoris/x.excalidraw → ../../../projets/x.excalidraw ← favoris (liens symboliques)
                          ├─ .shares.json, .share-secret      ← liens de partage et clé de signature
                          ├─ .session-secret                  ← clé des sessions OIDC (si SESSION_SECRET vide)
                          ├─ .history/projets/réseau/sdn.excalidraw/<date>.excalidraw ← versions
@@ -88,9 +90,9 @@ Fonctionnement :
 
 - Sans session, une page renvoie vers `/auth/login` et l'API répond `401` (en-tête `X-Auth-Login`, que l'interface suit). `/auth/login` redirige vers le fournisseur avec `state`, `nonce` et le défi PKCE ; au retour (`/auth/callback`), le code est échangé contre l'ID Token, dont sont vérifiés la signature (RS\*, PS\*, ES\* via le JWKS, rotation des clés comprise ; HS\* avec le secret client), l'émetteur, l'audience, l'expiration et le nonce. L'utilisateur revient sur l'URL demandée, schéma ouvert compris (`#/dossier/schema.excalidraw`).
 - La session tient dans un cookie `HttpOnly`, `SameSite=Lax`, `Secure` en HTTPS, signé HMAC-SHA256. Il ne contient que l'identité (aucun jeton du fournisseur) et survit aux redémarrages du conteneur ; changer `SESSION_SECRET` (ou supprimer `.session-secret`) déconnecte tout le monde.
-- Icône de déconnexion à droite de la barre du haut (nom et e-mail au survol) : elle enregistre le schéma ouvert, puis déconnecte.
+- À droite de la barre du haut, un cartouche encadré **OIDC** suivi de l'e-mail de l'utilisateur, puis l'icône de déconnexion (nom et e-mail au survol) : elle enregistre le schéma ouvert, puis déconnecte. En mode local, le cartouche est **LOCAL** suivi du nom du compte Basic (ou de `local` sans authentification).
 - Un compte hors de `OIDC_ALLOWED_GROUPS` reçoit une page *Accès refusé*.
-- Tous les utilisateurs authentifiés partagent les mêmes schémas (pas d'espaces privés).
+- L'arborescence commune est partagée par tous ; chaque utilisateur a en plus son espace **Personnel** et ses **Favoris** (voir *Espaces personnels et favoris*), identifiés par l'e-mail de l'ID Token (à défaut le `sub`).
 - Implémentation en bibliothèque standard Go (`internal/auth`), sans dépendance ajoutée.
 
 #### Exemple Authentik
@@ -174,11 +176,22 @@ Le champ de recherche de l'explorateur cherche dans les noms de fichiers et de d
 
 L'index est tenu en mémoire par le serveur : le texte de chaque schéma est extrait à la première recherche, puis relu seulement si le fichier a changé (date ou taille), y compris pour les fichiers modifiés hors de l'application. Rien n'est écrit sur le volume.
 
-### Tags et favoris
+### Espaces personnels et favoris
 
-Menu « … » d'un élément (ou barre de sélection pour plusieurs) : **Favori** et **Tags…**. Les tags sont libres (40 caractères, 20 par élément, saisis séparés par des virgules), comparés sans casse ni accents ; un tag déjà utilisé garde son écriture d'origine (`nsx` devient `NSX` s'il existe). La ligne de filtres sous la recherche liste les tags utilisés avec leur nombre d'éléments : un clic sur un tag ou sur **Favoris** affiche les éléments correspondants de toute l'arborescence, combinables avec le texte recherché. Les tags participent aussi à la recherche texte.
+En tête de la racine de l'explorateur, deux entrées propres à l'utilisateur connecté :
 
-Stockage : `DATA_DIR/.meta.json` (`{"items":{"chemin":{"tags":[…],"favorite":true}}}`), mis à jour aux renommages, déplacements, copies (tags seuls) et suppressions.
+- **Personnel** : espace privé, invisible des autres utilisateurs (liste, recherche, tags, API). Il fonctionne comme l'arborescence commune (dossiers, historique, miniatures, corbeille, partage par lien) ; on y déplace des schémas par glisser-déposer ou *Déplacer…*, dans les deux sens, avec leur historique, leurs tags et leurs liens de partage. Stockage : `DATA_DIR/.users/<id>/home/`, créé à la première connexion.
+- **Favoris** : l'étoile (menu « … » ou barre de sélection) ou un glisser-déposer sur *Favoris* crée un **lien symbolique relatif** vers le schéma d'origine dans `DATA_DIR/.users/<id>/favoris/`, sans le déplacer. Ouvrir un favori ouvre l'original ; *Supprimer* depuis Favoris retire seulement le lien. Les liens suivent les renommages et déplacements de l'original (pour tous les utilisateurs) et disparaissent quand il est supprimé ; un lien cassé par une modification hors de l'application est barré et peut être retiré. Seuls les schémas peuvent être favoris, pas les dossiers.
+
+`<id>` = e-mail OIDC en minuscules (caractères hors `[a-z0-9._@+-]` remplacés par `_`) ; en mode `local`, un seul utilisateur `local`, quel que soit le compte Basic. À la création d'un espace, les favoris communs de l'ancienne version (`.meta.json`) sont repris une fois dans les Favoris de l'utilisateur.
+
+Le volume doit accepter les liens symboliques (ext4, xfs, btrfs, ZFS, NFS ; pas certains montages CIFS/SMB).
+
+### Tags
+
+Menu « … » d'un élément (ou barre de sélection pour plusieurs) : **Tags…**. Les tags sont libres (40 caractères, 20 par élément, saisis séparés par des virgules), comparés sans casse ni accents ; un tag déjà utilisé garde son écriture d'origine (`nsx` devient `NSX` s'il existe). La ligne de filtres sous la recherche liste les tags utilisés avec leur nombre d'éléments : un clic sur un tag affiche les éléments correspondants de toute l'arborescence (et de l'espace personnel), combinables avec le texte recherché. Les tags participent aussi à la recherche texte.
+
+Stockage : `DATA_DIR/.meta.json` (`{"items":{"chemin":{"tags":[…]}}}`, et `.meta.json` de chaque espace personnel), mis à jour aux renommages, déplacements, copies (tags seuls) et suppressions.
 
 ### Partage en lecture seule
 
@@ -209,14 +222,14 @@ Chaque lecture renvoie un `ETag` (SHA-256 tronqué du contenu) ; chaque sauvegar
 
 ## API
 
-Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants commençant par `.` sont refusés, et les liens symboliques sortant de la racine sont bloqués.
+Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants commençant par `.` sont refusés, et les liens symboliques sortant de la racine sont bloqués. Deux préfixes virtuels, propres à l'utilisateur de la requête : `.perso/…` (son espace personnel) et `.favoris` (`GET /api/list?path=.favoris` liste ses favoris, `path` = chemin de l'original, `link` = nom du lien ; `DELETE /api/entry?path=.favoris/<lien>` retire le lien). La racine (`path=`) commence par les entrées `{"special":"favoris"}` et `{"special":"perso"}`.
 
 | Méthode | Route | Corps / paramètres | Réponse |
 |---|---|---|---|
 | GET | `/api/list?path=dir` | | `[Entry]` (dossiers puis schémas) |
 | GET | `/api/search?q=texte[&tag=t][&fav=true]` | | `[Entry + "snippet"]` (200 max) : noms et tags puis contenu, tous les mots requis ; `q` facultatif avec un filtre |
 | GET | `/api/tags` | | `[{"name","count"}]` |
-| POST | `/api/meta/favorite` | `{"paths":[…],"favorite":true}` | `204` |
+| POST | `/api/meta/favorite` | `{"paths":[…],"favorite":true}` | `204` ; schémas seulement, favoris de l'utilisateur (liens dans `.users/<id>/favoris`) |
 | POST | `/api/meta/tags` | `{"paths":[…],"add":["NSX"],"remove":["old"]}` | `204` |
 | GET | `/api/file?path=x.excalidraw` | | JSON du schéma + `ETag` |
 | PUT | `/api/file?path=x.excalidraw` | JSON ; `If-Match: <etag>` ou `If-None-Match: *` (création) | `Entry` + `ETag` ; `409` existe, `412` conflit |
@@ -243,14 +256,14 @@ Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants co
 | PUT | `/api/logo` | PNG (5 Mo, 8192×8192 px max) | réglages ; image recadrée et ré-encodée |
 | DELETE | `/api/logo` | | réglages |
 | GET | `/api/update` | | `{"enabled","tags":{"latest","next"},"latest","checkedAt"}` |
-| GET | `/api/me` | | `{"mode":"none"\|"local"\|"oidc","user":{"sub","name","email"},"logout"}` |
+| GET | `/api/me` | | `{"mode":"none"\|"local"\|"oidc","user":{"sub","name","email"},"logout","id"}` ; `id` : identifiant de l'espace personnel |
 | GET | `/auth/login?next=/chemin` | | mode `oidc` : redirection vers le fournisseur |
 | GET | `/auth/callback` | | mode `oidc` : retour du fournisseur, ouverture de session |
 | GET | `/auth/logout` | | mode `oidc` : fin de session (et chez le fournisseur si `OIDC_LOGOUT`) |
 | GET | `/healthz` | | `ok` (hors authentification) |
 | GET | `/s/<jeton>` | | vue publique en lecture seule (hors authentification) |
 
-`Entry` = `{"name","path","isDir","size","modTime","tags","favorite"}` (les deux derniers omis s'ils sont vides).
+`Entry` = `{"name","path","isDir","size","modTime","tags","favorite","special","link","broken"}` (champs après `modTime` omis s'ils sont vides).
 
 Exemple d'automatisation (génération de schémas par script) :
 
@@ -278,6 +291,7 @@ Arborescence :
 cmd/server/main.go          serveur HTTP, SPA embarquée, choix de l'authentification, healthcheck
 internal/auth/              OIDC (PKCE, vérification de l'ID Token, JWKS) et sessions signées
 internal/storage/           accès disque : sécurité des chemins, écriture atomique, ETag, corbeille, historique
+internal/storage/spaces.go  espaces personnels (.perso) et favoris par utilisateur (.favoris, liens symboliques)
 internal/api/               routes REST
 web/embed.go                embarque web/dist (produit par le build Vite)
 frontend/src/App.tsx        éditeur Excalidraw, sauvegarde auto, conflits, bibliothèque
@@ -289,7 +303,7 @@ frontend/src/HistoryDialog.tsx historique : aperçu, différences, restauration
 frontend/src/TagsDialog.tsx tags d'un ou plusieurs éléments
 frontend/src/ShareDialog.tsx liens de partage d'un schéma
 frontend/src/ShareView.tsx  vue publique /s/<jeton> (lecture seule)
-frontend/src/UserMenu.tsx   utilisateur connecté et déconnexion (mode OIDC)
+frontend/src/UserMenu.tsx   cartouche oidc/local + identifiant, déconnexion (mode OIDC)
 ```
 
 ## Sécurité
@@ -303,5 +317,5 @@ frontend/src/UserMenu.tsx   utilisateur connecté et déconnexion (mode OIDC)
 ## Limites et évolutions possibles
 
 - **Collaboration temps réel** : nécessiterait le serveur [excalidraw-room](https://github.com/excalidraw/excalidraw-room) (WebSocket) et la logique de réconciliation (`reconcileElements`) côté client.
-- **Multi-utilisateurs avec espaces privés** : identité transmise par le reverse proxy (`X-Forwarded-User`) et racine par utilisateur.
+- **Espaces personnels en mode `local`** : un seul utilisateur (`local`) ; une identité transmise par le reverse proxy (`X-Forwarded-User`) permettrait un espace par compte sans OIDC.
 - Les schémas avec beaucoup d'images embarquées sont volumineux (base64 dans le JSON) ; ajuster `MAX_BODY_MB`.
