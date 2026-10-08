@@ -13,6 +13,7 @@ Navigateur ──HTTP──▶ conteneur excalidraw-go (:8080, uid 65532, rootfs
                        ├─ /            SPA React + Excalidraw (embarquée dans le binaire)
                        ├─ /api/...     API fichiers (Go net/http)
                        ├─ /s/<jeton>   schéma partagé en lecture seule (hors authentification)
+                       ├─ /auth/...    connexion OIDC (AUTH_MODE=oidc)
                        └─ /healthz     sonde
                               │
                               ▼
@@ -23,6 +24,7 @@ Navigateur ──HTTP──▶ conteneur excalidraw-go (:8080, uid 65532, rootfs
                          ├─ .thumbs/projets/réseau/sdn.excalidraw.png ← miniatures (régénérables)
                          ├─ .meta.json                       ← tags et favoris
                          ├─ .shares.json, .share-secret      ← liens de partage et clé de signature
+                         ├─ .session-secret                  ← clé des sessions OIDC (si SESSION_SECRET vide)
                          ├─ .history/projets/réseau/sdn.excalidraw/<date>.excalidraw ← versions
                          └─ .trash/<horodatage>/...         ← éléments supprimés
 ```
@@ -32,7 +34,7 @@ Les schémas restent des fichiers `.excalidraw` standards : ils s'ouvrent tels q
 ## Démarrage
 
 ```bash
-cp .env.example .env        # optionnel : port, authentification Basic
+cp .env.example .env        # optionnel : port, authentification (Basic ou OIDC)
 docker compose up -d --build
 # http://localhost:8080
 ```
@@ -42,7 +44,9 @@ docker compose up -d --build
 | `LISTEN_ADDR`   | `:8080`  | Adresse d'écoute                                                  |
 | `DATA_DIR`      | `/data`  | Racine des schémas                                                |
 | `MAX_BODY_MB`   | `50`     | Taille max d'un schéma (images embarquées en base64 comprises)    |
-| `AUTH_USER` / `AUTH_PASSWORD` | vide | Active une authentification HTTP Basic si les deux sont définis |
+| `AUTH_MODE`     | `local`  | `local` ou `oidc` (voir *Authentification*) |
+| `AUTH_USER` / `AUTH_PASSWORD` | vide | Mode `local` : authentification HTTP Basic si les deux sont définis, aucune sinon |
+| `OIDC_*`, `SESSION_*` | | Mode `oidc` : voir *Authentification* |
 | `UPDATE_CHECK`  | `true`   | Interroge `registry.npmjs.org` pour signaler une nouvelle version d'Excalidraw (`false` : désactivé) |
 | `UPDATE_CHECK_INTERVAL` | `12h` | Intervalle entre deux vérifications (durée Go, minimum `1m`) |
 | `NPM_REGISTRY`  | `https://registry.npmjs.org` | Registre interrogé (miroir interne possible) |
