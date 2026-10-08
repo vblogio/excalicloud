@@ -63,6 +63,9 @@ func (s *Store) SetShareSecret(secret string) {
 
 // key renvoie la clé de signature, créée au besoin ; appelé sous sharesMu.
 func (s *Store) key() ([]byte, error) {
+	if s.keyFrom != nil {
+		return s.keyFrom.lockedKey()
+	}
 	if s.shareKey != nil {
 		return s.shareKey, nil
 	}
@@ -77,6 +80,13 @@ func (s *Store) key() ([]byte, error) {
 		return nil, err
 	}
 	return s.newKey()
+}
+
+// lockedKey renvoie la clé de signature pour un espace personnel.
+func (s *Store) lockedKey() ([]byte, error) {
+	s.sharesMu.Lock()
+	defer s.sharesMu.Unlock()
+	return s.key()
 }
 
 func (s *Store) newKey() ([]byte, error) {
@@ -230,11 +240,11 @@ func (s *Store) RevokeShare(id string) error {
 }
 
 // RevokeAllShares supprime tous les liens et change la clé de signature
-// (sauf si elle est imposée par SHARE_SECRET).
+// (sauf si elle est imposée par SHARE_SECRET ou reprise du Store principal).
 func (s *Store) RevokeAllShares() error {
 	return s.editShares(func(m map[string]shareDisk) (bool, error) {
 		clear(m)
-		if !s.fixedKey {
+		if !s.fixedKey && s.keyFrom == nil {
 			if _, err := s.newKey(); err != nil {
 				return false, err
 			}

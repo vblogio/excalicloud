@@ -50,6 +50,11 @@ type Entry struct {
 
 	Tags     []string `json:"tags,omitempty"`
 	Favorite bool     `json:"favorite,omitempty"`
+
+	// Dossiers virtuels et favoris (spaces.go).
+	Special string `json:"special,omitempty"` // "favoris" ou "perso" : entrée de la racine
+	Link    string `json:"link,omitempty"`    // nom du lien dans le dossier Favoris
+	Broken  bool   `json:"broken,omitempty"`  // favori dont le schéma d'origine a disparu
 }
 
 // Store est un dépôt de schémas enraciné dans un répertoire.
@@ -68,6 +73,7 @@ type Store struct {
 	sharesMu sync.Mutex // liens de partage (share.go)
 	shareKey []byte     // clé HMAC ; nil : pas encore chargée
 	fixedKey bool       // clé imposée par SHARE_SECRET
+	keyFrom  *Store     // espace personnel : clé de signature du Store principal
 }
 
 // New crée le répertoire racine si besoin et renvoie un Store.
