@@ -1,4 +1,4 @@
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Excalidraw,
   hashElementsVersion,
@@ -16,7 +16,7 @@ import type {
 import type { OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { api, ApiError, basename, stripExt, type Settings } from "./api";
 import { Explorer } from "./Explorer";
-import { CloseIcon, HistoryIcon, MenuIcon, MoonIcon, SaveIcon, SettingsIcon, ShareIcon, SunIcon, UpdateIcon } from "./icons";
+import { CloseIcon, HistoryIcon, MenuIcon, MoonIcon, PinIcon, SaveIcon, SettingsIcon, ShareIcon, SunIcon, UpdateIcon } from "./icons";
 import { ShareDialog } from "./ShareDialog";
 import { HistoryDialog } from "./HistoryDialog";
 import { Splitter } from "./Splitter";
@@ -72,6 +72,11 @@ const drawerMax = () => Math.max(DRAWER_MIN, window.innerWidth - 360); // garde 
 const clampDrawer = (w: number) => Math.round(Math.min(Math.max(w, DRAWER_MIN), drawerMax()));
 const initialDrawerWidth = () => clampDrawer(Number(load("drawerWidth")) || DRAWER_DEFAULT);
 
+// Explorateur épinglé (colonne fixe) ou non (masqué, s'ouvre par-dessus le canevas).
+const initialPinned = () => load("drawerPinned") !== "false";
+const PEEK_OPEN_MS = 150; // survol du bord gauche avant ouverture
+const PEEK_CLOSE_MS = 400; // sortie du panneau avant fermeture (ouverture par survol)
+
 /** Empreinte du contenu « persistant » (hors scroll, sélection, zoom...). */
 const sceneVersion = (
   elements: readonly OrderedExcalidrawElement[],
@@ -91,7 +96,10 @@ export default function App() {
   const [library, setLibrary] = useState<LibraryItems | null>(null);
   const [scene, setScene] = useState<Scene | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
-  const [drawerOpen, setDrawerOpen] = useState(() => !isMobile());
+  const [pinned, setPinned] = useState(initialPinned);
+  // Non épinglé : ouvert d'office tant qu'aucun schéma n'est demandé.
+  const [drawerOpen, setDrawerOpen] = useState(() => !isMobile() && (pinned || !pathFromHash()));
+  const [instant, setInstant] = useState(false); // bascule sans animation de la grille
   const [refreshKey, setRefreshKey] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [drawerWidth, setDrawerWidth] = useState(initialDrawerWidth);
@@ -116,6 +124,11 @@ export default function App() {
   const fitPending = useRef(false); // cadrage à faire au premier rendu du schéma ouvert
   const exTheme = useRef<string | null>(null); // dernier thème signalé par Excalidraw
   const openRef = useRef<(path: string, opts?: { skipFlush?: boolean }) => Promise<void>>(async () => {});
+  const pinnedRef = useRef(pinned);
+  pinnedRef.current = pinned;
+  const peek = useRef<"hover" | "click" | null>(null); // comment le panneau non épinglé a été ouvert
+  const peekTimer = useRef<number>(undefined);
+  const scrollShift = useRef(0); // décalage du canevas à compenser après une bascule épinglé/non épinglé
 
   // --- Sauvegarde -----------------------------------------------------------
 
@@ -227,7 +240,7 @@ export default function App() {
         setSaveState("saved");
         if (location.hash !== `#/${path}`) history.replaceState(null, "", `#/${encodeURI(path)}`);
         store("lastScene", path);
-        if (isMobile()) setDrawerOpen(false);
+        if (isMobile() || !pinnedRef.current) setDrawerOpen(false);
       } catch (e) {
         setLoadError(`Impossible d'ouvrir « ${path} » : ${e instanceof Error ? e.message : e}`);
       }
@@ -241,6 +254,11 @@ export default function App() {
     excalidraw.current = null;
     setScene(null);
     history.replaceState(null, "", location.pathname);
+    // Non épinglé : l'explorateur revient pour choisir le schéma suivant.
+    if (!pinnedRef.current && !isMobile()) {
+      peek.current = "click";
+      setDrawerOpen(true);
+    }
   }, []);
 
   openRef.current = openFile;
@@ -384,6 +402,63 @@ export default function App() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // --- Explorateur épinglé ou flottant ------------------------------------------
+
+  useEffect(() => {
+    store("drawerPinned", String(pinned));
+  }, [pinned]);
+
+  const togglePin = () => {
+    const ex = excalidraw.current;
+    // Panneau visible : le bord gauche du canevas se déplace de sa largeur. Le
+    // défilement est compensé pour que le schéma reste en place à l'écran.
+    if (ex && drawerOpen && !isMobile()) scrollShift.current = pinned ? -drawerWidth : drawerWidth;
+    peek.current = "hover"; // désépinglé sous le pointeur : se referme quand il en sort
+    setInstant(true);
+    setPinned((p) => !p);
+  };
+
+  useLayoutEffect(() => {
+    const shift = scrollShift.current;
+    const ex = excalidraw.current;
+    scrollShift.current = 0;
+    if (shift && ex) {
+      const { scrollX, zoom } = ex.getAppState();
+      ex.updateScene({ appState: { scrollX: scrollX - shift / zoom.value } });
+    }
+    if (!instant) return;
+    const id = requestAnimationFrame(() => setInstant(false));
+    return () => cancelAnimationFrame(id);
+  }, [pinned, instant]);
+
+  const floating = !pinned && drawerOpen;
+
+  const peekOpen = () => {
+    clearTimeout(peekTimer.current);
+    peekTimer.current = window.setTimeout(() => {
+      peek.current = "hover";
+      setDrawerOpen(true);
+    }, PEEK_OPEN_MS);
+  };
+  const peekCancel = () => clearTimeout(peekTimer.current);
+  const peekLeave = () => {
+    if (pinnedRef.current || peek.current !== "hover" || isMobile()) return;
+    clearTimeout(peekTimer.current);
+    peekTimer.current = window.setTimeout(() => setDrawerOpen(false), PEEK_CLOSE_MS);
+  };
+  useEffect(() => () => clearTimeout(peekTimer.current), []);
+
+  // Échap referme le panneau flottant (sauf si un dialogue ou la sélection l'utilise).
+  useEffect(() => {
+    if (!floating) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || document.querySelector(".modal-backdrop")) return;
+      setDrawerOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [floating]);
+
   // Titre et logo personnalisés (partagés, stockés côté serveur).
   useEffect(() => {
     api.settings().then(setSettings).catch(console.error);
@@ -442,7 +517,7 @@ export default function App() {
 
   return (
     <div
-      className={`app ${drawerOpen ? "drawer-open" : ""} ${resizing ? "resizing" : ""} ${scene ? "has-scene" : ""}`}
+      className={`app ${drawerOpen ? "drawer-open" : ""} ${pinned ? "pinned" : "unpinned"} ${resizing ? "resizing" : ""} ${instant ? "instant" : ""} ${scene ? "has-scene" : ""}`}
       style={{ "--drawer-w": `${drawerWidth}px` } as CSSProperties}
     >
       <header className="topbar">
@@ -451,7 +526,11 @@ export default function App() {
           aria-label="Afficher/masquer l'explorateur"
           aria-pressed={drawerOpen}
           title="Explorateur"
-          onClick={() => setDrawerOpen((o) => !o)}
+          onClick={() => {
+            clearTimeout(peekTimer.current);
+            peek.current = "click";
+            setDrawerOpen((o) => !o);
+          }}
         >
           <MenuIcon />
         </button>
@@ -538,7 +617,7 @@ export default function App() {
         </div>
       </header>
 
-      <aside className="drawer">
+      <aside className="drawer" onMouseEnter={peekCancel} onMouseLeave={peekLeave}>
         <Explorer
           current={scene?.path ?? null}
           refreshKey={refreshKey}
@@ -547,6 +626,21 @@ export default function App() {
           onDeleted={onDeleted}
           onHistory={showHistory}
           onShare={setShareFor}
+          toolbarEnd={
+            <button
+              className={`icon-btn pin-btn ${pinned ? "on" : ""}`}
+              aria-pressed={pinned}
+              aria-label={pinned ? "Désépingler l'explorateur" : "Épingler l'explorateur"}
+              title={
+                pinned
+                  ? "Désépingler : l'explorateur se masque et s'ouvre par-dessus le schéma (bouton ☰ ou survol du bord gauche)"
+                  : "Épingler l'explorateur à côté du schéma"
+              }
+              onClick={togglePin}
+            >
+              <PinIcon />
+            </button>
+          }
         />
       </aside>
       <Splitter
@@ -558,6 +652,9 @@ export default function App() {
         onReset={() => setDrawerWidth(clampDrawer(DRAWER_DEFAULT))}
       />
       <div className="backdrop" onClick={() => setDrawerOpen(false)} />
+      {!pinned && !drawerOpen && (
+        <div className="peek-edge" aria-hidden onMouseEnter={peekOpen} onMouseLeave={peekCancel} />
+      )}
 
       <main className="canvas">
         {loadError && <div className="error">{loadError}</div>}
