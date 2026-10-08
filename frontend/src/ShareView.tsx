@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Excalidraw } from "@excalidraw/excalidraw";
-import type { ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
+import type { AppState, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
 import { api, type PublicScene } from "./api";
 import { DEFAULT_TITLE } from "./SettingsDialog";
+import { fitScene } from "./fit";
 import { DownloadIcon, EyeIcon, MoonIcon, SunIcon } from "./icons";
 
 type Theme = "light" | "dark";
@@ -22,6 +23,21 @@ export function ShareView({ token }: { token: string }) {
   const [data, setData] = useState<PublicScene | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [theme, setTheme] = useState<Theme>(initialTheme);
+  const excalidraw = useRef<ExcalidrawImperativeAPI | null>(null);
+  const fitted = useRef(false);
+
+  const onApi = useCallback((ex: ExcalidrawImperativeAPI | null) => {
+    excalidraw.current = ex;
+  }, []);
+  // excalidrawAPI jusqu'à la 0.18, onExcalidrawAPI sur le canal next.
+  const apiProps = { excalidrawAPI: onApi, onExcalidrawAPI: onApi } as object;
+
+  // Premier rendu : cadrage sur l'ensemble du schéma.
+  const onChange = useCallback((_elements: unknown, appState: AppState) => {
+    if (appState.isLoading || fitted.current || !excalidraw.current) return;
+    fitted.current = true;
+    fitScene(excalidraw.current);
+  }, []);
 
   useEffect(() => {
     api
@@ -51,7 +67,6 @@ export function ShareView({ token }: { token: string }) {
     elements: (data.scene.elements ?? []) as ExcalidrawInitialDataState["elements"],
     appState: { ...(data.scene.appState ?? {}), theme } as ExcalidrawInitialDataState["appState"],
     files: (data.scene.files ?? {}) as ExcalidrawInitialDataState["files"],
-    scrollToContent: true,
   };
 
   return (
@@ -96,6 +111,8 @@ export function ShareView({ token }: { token: string }) {
           <Excalidraw
             initialData={initialData}
             viewModeEnabled
+            {...apiProps}
+            onChange={onChange}
             theme={theme}
             langCode="fr-FR"
             name={data!.name}

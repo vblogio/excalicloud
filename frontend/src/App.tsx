@@ -23,6 +23,7 @@ import { Splitter } from "./Splitter";
 import { SettingsDialog, DEFAULT_TITLE } from "./SettingsDialog";
 import { pendingVersion, useUpdateStatus } from "./update";
 import { storeThumb } from "./thumbs";
+import { fitScene } from "./fit";
 
 type Theme = "light" | "dark";
 type SaveState = "saved" | "dirty" | "saving" | "error";
@@ -105,6 +106,7 @@ export default function App() {
   const libTimer = useRef<number>(undefined);
   const libJson = useRef(""); // dernier état connu côté serveur
   const sceneSeq = useRef(0);
+  const fitPending = useRef(false); // cadrage à faire au premier rendu du schéma ouvert
   const exTheme = useRef<string | null>(null); // dernier thème signalé par Excalidraw
   const openRef = useRef<(path: string, opts?: { skipFlush?: boolean }) => Promise<void>>(async () => {});
 
@@ -169,6 +171,10 @@ export default function App() {
         if (appState.theme !== theme) setTheme(appState.theme as Theme);
       }
       if (!pathRef.current || appState.isLoading) return;
+      if (fitPending.current && excalidraw.current) {
+        fitPending.current = false;
+        fitScene(excalidraw.current);
+      }
       const version = sceneVersion(elements, appState, files);
       // Premier onChange après chargement : c'est la version de référence.
       if (savedVersion.current === "") {
@@ -195,6 +201,7 @@ export default function App() {
         etagRef.current = etag;
         savedVersion.current = ""; // fixée au premier onChange (voir onChange)
         pathRef.current = path;
+        fitPending.current = true;
         setScene({
           id: ++sceneSeq.current,
           path,
@@ -202,7 +209,6 @@ export default function App() {
             elements: data.elements ?? [],
             appState: { ...(data.appState ?? {}), theme },
             files: data.files ?? {},
-            scrollToContent: true,
           },
         });
         setSaveState("saved");
