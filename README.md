@@ -58,6 +58,72 @@ docker compose up -d --build
 
 Bind mount au lieu du volume nommé : `- ./data:/data` puis `chown -R 65532:65532 ./data`.
 
+## Authentification
+
+`AUTH_MODE` choisit le mode :
+
+| Mode | Comportement |
+|---|---|
+| `local` (défaut) | Authentification HTTP Basic si `AUTH_USER` et `AUTH_PASSWORD` sont définis ; sinon aucune (usage local, ou reverse proxy qui authentifie déjà). Comportement des versions précédentes. |
+| `oidc` | Connexion auprès d'un fournisseur OpenID Connect (Authentik, Keycloak, Entra ID, Google, Dex…), flux *Authorization Code* + PKCE (S256). |
+
+Dans les deux modes, `/s/…` (liens de partage), `/api/public/…`, `/healthz` et les fichiers statiques du build restent accessibles sans authentification.
+
+### Variables du mode `oidc`
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `OIDC_ISSUER` | requis | URL de l'émetteur ; `<OIDC_ISSUER>/.well-known/openid-configuration` doit répondre depuis le conteneur |
+| `OIDC_CLIENT_ID` | requis | Identifiant du client |
+| `OIDC_CLIENT_SECRET` | vide | Secret d'un client confidentiel (`client_secret_basic`) ; vide : client public, PKCE seul. `OIDC_CLIENT_SECRET_FILE` lit le secret dans un fichier (secret Docker) |
+| `OIDC_REDIRECT_URL` | vide | URI de retour, ex. `https://draw.example.org/auth/callback` ; vide : déduite de la requête (`X-Forwarded-Proto` / `X-Forwarded-Host` du reverse proxy). La fixer est recommandé |
+| `OIDC_SCOPES` | `openid profile email` | Scopes demandés (espaces ou virgules) |
+| `OIDC_ALLOWED_GROUPS` | vide | Groupes autorisés, séparés par des virgules ; vide : tout compte authentifié par le fournisseur |
+| `OIDC_GROUPS_CLAIM` | `groups` | Claim de l'ID Token portant les groupes ; chemin pointé accepté (`realm_access.roles`) |
+| `OIDC_LOGOUT` | `true` | La déconnexion ferme aussi la session chez le fournisseur (`end_session_endpoint`) |
+| `SESSION_TTL` | `24h` | Durée de session, prolongée à chaque requête passée la moitié : elle n'expire qu'après une inactivité de cet ordre (minimum `5m`) |
+| `SESSION_SECRET` | vide | Clé de signature des cookies (16 caractères min.) ; vide : clé aléatoire générée dans `DATA_DIR/.session-secret` |
+
+Fonctionnement :
+
+- Sans session, une page renvoie vers `/auth/login` et l'API répond `401` (en-tête `X-Auth-Login`, que l'interface suit). `/auth/login` redirige vers le fournisseur avec `state`, `nonce` et le défi PKCE ; au retour (`/auth/callback`), le code est échangé contre l'ID Token, dont sont vérifiés la signature (RS\*, PS\*, ES\* via le JWKS, rotation des clés comprise ; HS\* avec le secret client), l'émetteur, l'audience, l'expiration et le nonce. L'utilisateur revient sur l'URL demandée, schéma ouvert compris (`#/dossier/schema.excalidraw`).
+- La session tient dans un cookie `HttpOnly`, `SameSite=Lax`, `Secure` en HTTPS, signé HMAC-SHA256. Il ne contient que l'identité (aucun jeton du fournisseur) et survit aux redémarrages du conteneur ; changer `SESSION_SECRET` (ou supprimer `.session-secret`) déconnecte tout le monde.
+- Icône de déconnexion à droite de la barre du haut (nom et e-mail au survol) : elle enregistre le schéma ouvert, puis déconnecte.
+- Un compte hors de `OIDC_ALLOWED_GROUPS` reçoit une page *Accès refusé*.
+- Tous les utilisateurs authentifiés partagent les mêmes schémas (pas d'espaces privés).
+- Implémentation en bibliothèque standard Go (`internal/auth`), sans dépendance ajoutée.
+
+#### Exemple Authentik
+
+1. *Applications → Providers → Create → OAuth2/OpenID Provider* : type de client *Confidential*, *Redirect URIs* `https://draw.example.org/auth/callback` ; clé de signature : un certificat (RS256), ou aucune (HS256 avec le secret client, accepté aussi).
+2. *Applications → Create* : slug `excalicloud`, provider ci-dessus. Restreindre l'accès par les *bindings* de l'application, ou par `OIDC_ALLOWED_GROUPS` (le scope `profile` d'Authentik inclut le claim `groups`).
+3. `.env` :
+
+```bash
+AUTH_MODE=oidc
+OIDC_ISSUER=https://auth.example.org/application/o/excalicloud/
+OIDC_CLIENT_ID=<Client ID>
+OIDC_CLIENT_SECRET=<Client Secret>
+OIDC_REDIRECT_URL=https://draw.example.org/auth/callback
+```
+
+#### Exemple Keycloak
+
+1. *Clients → Create client* : OpenID Connect, *Client ID* `excalicloud`, *Client authentication* activé, *Standard flow* seul ; *Valid redirect URIs* `https://draw.example.org/auth/callback`, *Valid post logout redirect URIs* `https://draw.example.org/auth/logged-out` ; onglet *Advanced* : *Proof Key for Code Exchange Code Challenge Method* = `S256`.
+2. Groupes : *Clients → excalicloud → Client scopes → excalicloud-dedicated → Add mapper → By configuration → Group Membership*, *Token Claim Name* `groups`, *Add to ID token* activé (avec *Full group path*, le `/` initial est ignoré à la comparaison). Pour filtrer sur des rôles de realm : `OIDC_GROUPS_CLAIM=realm_access.roles`, en activant *Add to ID token* sur le mapper *realm roles*.
+3. `.env` :
+
+```bash
+AUTH_MODE=oidc
+OIDC_ISSUER=https://sso.example.org/realms/vlab
+OIDC_CLIENT_ID=excalicloud
+OIDC_CLIENT_SECRET=<Credentials → Client Secret>
+OIDC_REDIRECT_URL=https://draw.example.org/auth/callback
+OIDC_ALLOWED_GROUPS=excalicloud-users
+```
+
+Sans `id_token_hint`, Keycloak demande de confirmer la déconnexion ; `OIDC_LOGOUT=false` limite la déconnexion à excalicloud (la session SSO reste ouverte et la reconnexion est alors immédiate).
+
 ## Utilisation
 
 - **＋ Schéma / ＋ Dossier** : création dans le dossier courant.
@@ -120,7 +186,7 @@ Icône de partage de la barre du haut (schéma ouvert) ou menu « … » → **P
 - Jeton = `<id>.<signature>` : id aléatoire de 128 bits et HMAC-SHA256 tronqué (128 bits) par la clé du serveur. Un jeton n'est accepté que si la signature est valide, si le lien existe encore dans `DATA_DIR/.shares.json` et s'il n'a pas expiré.
 - **Révocation** lien par lien (dialogue *Partager* ou *Paramètres → Liens de partage*), ou globale avec **Tout révoquer**, qui renouvelle aussi la clé (sauf si elle est imposée par `SHARE_SECRET`).
 - Le lien suit le schéma s'il est renommé ou déplacé, et disparaît s'il est supprimé.
-- Avec `AUTH_USER`/`AUTH_PASSWORD`, seuls `/s/…`, `/api/public/…`, `/healthz` et les fichiers statiques du build (code de l'application, polices) échappent à l'authentification. Derrière un reverse proxy avec SSO, exclure de la même façon `/s/` et `/api/public/` de l'authentification du proxy. Réponses en `X-Robots-Tag: noindex`.
+- Avec l'authentification intégrée (Basic ou OIDC), seuls `/s/…`, `/api/public/…`, `/healthz` et les fichiers statiques du build (code de l'application, polices) échappent à l'authentification. Derrière un reverse proxy avec SSO, exclure de la même façon `/s/` et `/api/public/` de l'authentification du proxy. Réponses en `X-Robots-Tag: noindex`.
 
 ### Historique des versions
 
@@ -176,6 +242,10 @@ Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants co
 | PUT | `/api/logo` | PNG (5 Mo, 8192×8192 px max) | réglages ; image recadrée et ré-encodée |
 | DELETE | `/api/logo` | | réglages |
 | GET | `/api/update` | | `{"enabled","tags":{"latest","next"},"latest","checkedAt"}` |
+| GET | `/api/me` | | `{"mode":"none"\|"local"\|"oidc","user":{"sub","name","email"},"logout"}` |
+| GET | `/auth/login?next=/chemin` | | mode `oidc` : redirection vers le fournisseur |
+| GET | `/auth/callback` | | mode `oidc` : retour du fournisseur, ouverture de session |
+| GET | `/auth/logout` | | mode `oidc` : fin de session (et chez le fournisseur si `OIDC_LOGOUT`) |
 | GET | `/healthz` | | `ok` (hors authentification) |
 | GET | `/s/<jeton>` | | vue publique en lecture seule (hors authentification) |
 
@@ -204,7 +274,8 @@ cd frontend && npm run build && cd .. && go build -o server ./cmd/server
 Arborescence :
 
 ```
-cmd/server/main.go          serveur HTTP, SPA embarquée, auth Basic, healthcheck
+cmd/server/main.go          serveur HTTP, SPA embarquée, choix de l'authentification, healthcheck
+internal/auth/              OIDC (PKCE, vérification de l'ID Token, JWKS) et sessions signées
 internal/storage/           accès disque : sécurité des chemins, écriture atomique, ETag, corbeille, historique
 internal/api/               routes REST
 web/embed.go                embarque web/dist (produit par le build Vite)
@@ -217,12 +288,13 @@ frontend/src/HistoryDialog.tsx historique : aperçu, différences, restauration
 frontend/src/TagsDialog.tsx tags d'un ou plusieurs éléments
 frontend/src/ShareDialog.tsx liens de partage d'un schéma
 frontend/src/ShareView.tsx  vue publique /s/<jeton> (lecture seule)
+frontend/src/UserMenu.tsx   utilisateur connecté et déconnexion (mode OIDC)
 ```
 
 ## Sécurité
 
 - Conteneur non-root, rootfs en lecture seule, `cap_drop: ALL`, `no-new-privileges`.
-- L'authentification Basic intégrée suffit pour un usage local ; en exposition réseau, placer le service derrière un reverse proxy TLS (Traefik, Caddy, nginx) avec SSO (Authelia, oauth2-proxy, Authentik) et laisser `AUTH_*` vides.
+- L'authentification Basic (`AUTH_MODE=local`) suffit pour un usage local ; en exposition réseau, utiliser `AUTH_MODE=oidc` derrière un reverse proxy TLS (Traefik, Caddy, nginx), ou un SSO porté par le proxy (Authelia, oauth2-proxy, Authentik outpost) avec `AUTH_MODE=local` et `AUTH_*` vides.
 - Écritures atomiques (fichier temporaire + `fsync` + `rename`) : pas de schéma tronqué en cas d'arrêt brutal.
 - Liens de partage : seule surface accessible sans authentification ; jetons non énumérables (id 128 bits signé HMAC), révocables, à durée limitée au choix. Un lien donne la dernière version enregistrée du schéma, images embarquées comprises.
 - Aucune suppression physique : la purge de `.trash/` est à la charge de l'exploitant (ex. `find /data/.trash -mindepth 1 -maxdepth 1 -mtime +30 -exec rm -rf {} +`).
