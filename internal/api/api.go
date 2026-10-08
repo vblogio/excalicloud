@@ -26,6 +26,10 @@
 //	GET    /api/settings / PUT {"title","channel"} paramètres (titre, logo, canal)
 //	GET    /api/logo  /  PUT (image/png)  /  DELETE   logo 64x64
 //	GET    /api/update                    dernière version d'Excalidraw sur npm
+//
+// Les chemins sont vus par l'utilisateur connecté (storage.Space) : l'arborescence
+// commune, plus ".perso/..." (son espace personnel) et ".favoris" (ses favoris,
+// liens symboliques vers les originaux ; DELETE .favoris/x retire le lien).
 package api
 
 import (
@@ -45,9 +49,26 @@ import (
 
 // Handler regroupe les routes de l'API.
 type Handler struct {
-	Store   *storage.Store
-	MaxBody int64           // taille max d'un schéma (images embarquées comprises)
-	Update  *update.Checker // nil : vérification des mises à jour désactivée
+	Store   *storage.Store             // arborescence commune : bibliothèque, paramètres, logo
+	Spaces  *storage.Spaces            // schémas : arborescence commune, espaces personnels, favoris
+	User    func(*http.Request) string // identifiant de l'utilisateur (storage.UserID)
+	MaxBody int64                      // taille max d'un schéma (images embarquées comprises)
+	Update  *update.Checker            // nil : vérification des mises à jour désactivée
+}
+
+// space renvoie la vue de l'utilisateur de la requête (espace personnel et
+// favoris) ; utilisateur unique LocalUser sans OIDC.
+func (h *Handler) space(w http.ResponseWriter, r *http.Request) (*storage.Space, bool) {
+	id := storage.LocalUser
+	if h.User != nil {
+		id = h.User(r)
+	}
+	u, err := h.Spaces.For(id)
+	if err != nil {
+		fail(w, err)
+		return nil, false
+	}
+	return u, true
 }
 
 // Register enregistre les routes sur mux (motifs Go 1.22+).
@@ -138,7 +159,11 @@ func (h *Handler) decode(w http.ResponseWriter, r *http.Request, v any) bool {
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
-	entries, err := h.Store.List(r.URL.Query().Get("path"))
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
+	entries, err := u.List(r.URL.Query().Get("path"))
 	if err != nil {
 		fail(w, err)
 		return
@@ -147,9 +172,13 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
 	q := r.URL.Query()
 	f := storage.Filter{Tag: q.Get("tag"), Favorite: q.Get("fav") == "true"}
-	entries, err := h.Store.Search(q.Get("q"), f, 200)
+	entries, err := u.Search(q.Get("q"), f, 200)
 	if err != nil {
 		fail(w, err)
 		return
@@ -158,7 +187,11 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) tags(w http.ResponseWriter, r *http.Request) {
-	tags, err := h.Store.Tags()
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
+	tags, err := u.Tags()
 	if err != nil {
 		fail(w, err)
 		return
@@ -187,11 +220,15 @@ func (h *Handler) decodeMeta(w http.ResponseWriter, r *http.Request) (metaReq, b
 }
 
 func (h *Handler) setFavorite(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
 	req, ok := h.decodeMeta(w, r)
 	if !ok {
 		return
 	}
-	if err := h.Store.SetFavorite(req.Paths, req.Favorite); err != nil {
+	if err := u.SetFavorite(req.Paths, req.Favorite); err != nil {
 		fail(w, err)
 		return
 	}
@@ -199,11 +236,15 @@ func (h *Handler) setFavorite(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) editTags(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
 	req, ok := h.decodeMeta(w, r)
 	if !ok {
 		return
 	}
-	if err := h.Store.EditTags(req.Paths, req.Add, req.Remove); err != nil {
+	if err := u.EditTags(req.Paths, req.Add, req.Remove); err != nil {
 		fail(w, err)
 		return
 	}
@@ -211,7 +252,11 @@ func (h *Handler) editTags(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) readFile(w http.ResponseWriter, r *http.Request) {
-	data, etag, err := h.Store.Read(r.URL.Query().Get("path"))
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
+	data, etag, err := u.Read(r.URL.Query().Get("path"))
 	if err != nil {
 		fail(w, err)
 		return
@@ -227,13 +272,17 @@ func (h *Handler) readFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) writeFile(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
 	data, err := h.readBody(w, r)
 	if err != nil {
 		fail(w, err)
 		return
 	}
 	create := r.Header.Get("If-None-Match") == "*"
-	entry, etag, err := h.Store.Write(r.URL.Query().Get("path"), data, r.Header.Get("If-Match"), create)
+	entry, etag, err := u.Write(r.URL.Query().Get("path"), data, r.Header.Get("If-Match"), create)
 	if err != nil {
 		fail(w, err)
 		return
@@ -252,11 +301,15 @@ type moveReq struct {
 }
 
 func (h *Handler) mkdir(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
 	var req pathReq
 	if !h.decode(w, r, &req) {
 		return
 	}
-	entry, err := h.Store.Mkdir(req.Path)
+	entry, err := u.Mkdir(req.Path)
 	if err != nil {
 		fail(w, err)
 		return
@@ -265,11 +318,15 @@ func (h *Handler) mkdir(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) move(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
 	var req moveReq
 	if !h.decode(w, r, &req) {
 		return
 	}
-	entry, err := h.Store.Move(req.From, req.To)
+	entry, err := u.Move(req.From, req.To)
 	if err != nil {
 		fail(w, err)
 		return
@@ -285,6 +342,10 @@ type moveManyReq struct {
 // moveMany renvoie toujours 200 avec le détail par élément : le client
 // affiche les échecs partiels (ex. nom déjà pris dans la destination).
 func (h *Handler) moveMany(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
 	var req moveManyReq
 	if !h.decode(w, r, &req) {
 		return
@@ -293,7 +354,7 @@ func (h *Handler) moveMany(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "entre 1 et 1000 chemins attendus")
 		return
 	}
-	res, err := h.Store.MoveMany(req.Paths, req.Dir)
+	res, err := u.MoveMany(req.Paths, req.Dir)
 	if err != nil {
 		fail(w, err)
 		return
@@ -302,7 +363,11 @@ func (h *Handler) moveMany(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) readThumb(w http.ResponseWriter, r *http.Request) {
-	data, mod, err := h.Store.ReadThumb(r.URL.Query().Get("path"))
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
+	data, mod, err := u.ReadThumb(r.URL.Query().Get("path"))
 	if err != nil {
 		// Pas de mise en cache d'une absence : la miniature va être générée.
 		w.Header().Set("Cache-Control", "no-store")
@@ -317,9 +382,13 @@ func (h *Handler) readThumb(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) writeThumb(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
 	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, storage.MaxThumbSize))
 	if err == nil {
-		err = h.Store.WriteThumb(r.URL.Query().Get("path"), data)
+		err = u.WriteThumb(r.URL.Query().Get("path"), data)
 	}
 	if err != nil {
 		fail(w, err)
@@ -329,11 +398,15 @@ func (h *Handler) writeThumb(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) copy(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
 	var req moveReq
 	if !h.decode(w, r, &req) {
 		return
 	}
-	entry, err := h.Store.Copy(req.From, req.To)
+	entry, err := u.Copy(req.From, req.To)
 	if err != nil {
 		fail(w, err)
 		return
@@ -342,8 +415,12 @@ func (h *Handler) copy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
 	q := r.URL.Query()
-	if err := h.Store.Delete(q.Get("path"), q.Get("recursive") == "true"); err != nil {
+	if err := u.Delete(q.Get("path"), q.Get("recursive") == "true"); err != nil {
 		fail(w, err)
 		return
 	}
@@ -351,7 +428,11 @@ func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
-	vs, err := h.Store.Versions(r.URL.Query().Get("path"))
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
+	vs, err := u.Versions(r.URL.Query().Get("path"))
 	if err != nil {
 		fail(w, err)
 		return
@@ -361,8 +442,12 @@ func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) readVersion(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
 	q := r.URL.Query()
-	data, err := h.Store.ReadVersion(q.Get("path"), q.Get("id"))
+	data, err := u.ReadVersion(q.Get("path"), q.Get("id"))
 	if err != nil {
 		fail(w, err)
 		return
@@ -374,11 +459,15 @@ func (h *Handler) readVersion(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) snapshot(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
 	var req pathReq
 	if !h.decode(w, r, &req) {
 		return
 	}
-	v, err := h.Store.Snapshot(req.Path)
+	v, err := u.Snapshot(req.Path)
 	if err != nil {
 		fail(w, err)
 		return
@@ -392,11 +481,15 @@ type restoreReq struct {
 }
 
 func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
 	var req restoreReq
 	if !h.decode(w, r, &req) {
 		return
 	}
-	entry, etag, err := h.Store.Restore(req.Path, req.ID)
+	entry, etag, err := u.Restore(req.Path, req.ID)
 	if err != nil {
 		fail(w, err)
 		return
@@ -406,7 +499,11 @@ func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) shares(w http.ResponseWriter, r *http.Request) {
-	l, err := h.Store.Shares(r.URL.Query().Get("path"))
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
+	l, err := u.Shares(r.URL.Query().Get("path"))
 	if err != nil {
 		fail(w, err)
 		return
@@ -421,6 +518,10 @@ type shareReq struct {
 }
 
 func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
 	var req shareReq
 	if !h.decode(w, r, &req) {
 		return
@@ -429,7 +530,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "durée de 0 (sans expiration) à 3650 jours")
 		return
 	}
-	sh, err := h.Store.CreateShare(req.Path, time.Duration(req.Days)*24*time.Hour)
+	sh, err := u.CreateShare(req.Path, time.Duration(req.Days)*24*time.Hour)
 	if err != nil {
 		fail(w, err)
 		return
@@ -438,7 +539,11 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) revokeShare(w http.ResponseWriter, r *http.Request) {
-	if err := h.Store.RevokeShare(r.URL.Query().Get("id")); err != nil {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
+	if err := u.RevokeShare(r.URL.Query().Get("id")); err != nil {
 		fail(w, err)
 		return
 	}
@@ -446,7 +551,11 @@ func (h *Handler) revokeShare(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) revokeAllShares(w http.ResponseWriter, r *http.Request) {
-	if err := h.Store.RevokeAllShares(); err != nil {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
+	if err := u.RevokeAllShares(); err != nil {
 		fail(w, err)
 		return
 	}
@@ -458,7 +567,7 @@ func (h *Handler) revokeAllShares(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) public(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
-	sh, data, err := h.Store.ReadShared(r.PathValue("token"))
+	sh, data, err := h.Spaces.ReadShared(r.PathValue("token"))
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			writeErr(w, http.StatusNotFound, "lien invalide, expiré ou révoqué")

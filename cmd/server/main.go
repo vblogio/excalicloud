@@ -90,7 +90,8 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	(&api.Handler{Store: store, MaxBody: maxMB << 20, Update: checker}).Register(mux)
+	spaces := storage.NewSpaces(store)
+	(&api.Handler{Store: store, Spaces: spaces, User: userID, MaxBody: maxMB << 20, Update: checker}).Register(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})
@@ -168,9 +169,26 @@ func authenticate(ctx context.Context, mux *http.ServeMux, dataDir string) (http
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		_ = json.NewEncoder(w).Encode(m)
+		// id : identifiant de l'utilisateur, qui nomme son espace personnel.
+		_ = json.NewEncoder(w).Encode(struct {
+			auth.Me
+			ID string `json:"id"`
+		}{m, userID(r)})
 	})
 	return h, nil
+}
+
+// userID identifie l'utilisateur d'une requête pour son espace personnel et
+// ses favoris : email OIDC (sinon sub), utilisateur unique storage.LocalUser
+// en authentification locale ou sans authentification.
+func userID(r *http.Request) string {
+	if u := auth.UserFrom(r.Context()); u != nil {
+		if u.Email != "" {
+			return storage.UserID(u.Email)
+		}
+		return storage.UserID("sub-" + u.Sub)
+	}
+	return storage.LocalUser
 }
 
 // oidcConfig lit les variables OIDC_* et SESSION_*.

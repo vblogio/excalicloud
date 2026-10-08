@@ -54,7 +54,7 @@ func TestAuthenticateModes(t *testing.T) {
 		t.Setenv("AUTH_MODE", "")
 		t.Setenv("AUTH_USER", "")
 		h, err := authenticate(context.Background(), http.NewServeMux(), t.TempDir())
-		if err != nil || me(t, h, "") != `{"mode":"none"}` {
+		if err != nil || me(t, h, "") != `{"mode":"none","id":"local"}` {
 			t.Fatalf("%v %s", err, me(t, h, ""))
 		}
 	})
