@@ -11,10 +11,29 @@ services:
 #    ports:
 #      - "${EXCALIDRAW_PORT:-8080}:8080"
     environment:
-      # Authentification Basic optionnelle (laisser vide pour la désactiver,
-      # par exemple derrière un reverse proxy qui gère déjà l'authentification).
+      # Authentification : local (Basic avec AUTH_USER/AUTH_PASSWORD, aucune si
+      # vides, ex. derrière un reverse proxy avec SSO) ou oidc (OIDC_* ci-dessous).
+      AUTH_MODE: ${AUTH_MODE:-local}
       AUTH_USER: ${AUTH_USER:-}
       AUTH_PASSWORD: ${AUTH_PASSWORD:-}
+      # Mode oidc : fournisseur OpenID Connect (Authentik, Keycloak...). Client
+      # confidentiel (secret) ou public (PKCE seul) ; URI de redirection à
+      # déclarer chez le fournisseur : https://<hôte>/auth/callback.
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      # Vide : déduite de la requête (en-têtes X-Forwarded-* du reverse proxy).
+      OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL:-}
+      OIDC_SCOPES: ${OIDC_SCOPES:-openid profile email}
+      # Groupes autorisés, séparés par des virgules (vide : tout compte authentifié).
+      OIDC_ALLOWED_GROUPS: ${OIDC_ALLOWED_GROUPS:-}
+      OIDC_GROUPS_CLAIM: ${OIDC_GROUPS_CLAIM:-groups}
+      # Déconnexion propagée au fournisseur (end_session_endpoint).
+      OIDC_LOGOUT: ${OIDC_LOGOUT:-true}
+      # Session : durée d'inactivité max, clé de signature des cookies (16 car.
+      # min. ; vide : clé aléatoire générée dans DATA_DIR/.session-secret).
+      SESSION_TTL: ${SESSION_TTL:-24h}
+      SESSION_SECRET: ${SESSION_SECRET:-}
       # Taille max d'un schéma (images embarquées en base64 comprises).
       MAX_BODY_MB: ${MAX_BODY_MB:-50}
       # Icône « mise à jour d'Excalidraw disponible » (interroge registry.npmjs.org).

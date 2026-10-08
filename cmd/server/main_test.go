@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -35,4 +37,47 @@ func TestBasicAuthPublicPaths(t *testing.T) {
 	if rec.Code != 200 {
 		t.Errorf("authentifié : %d", rec.Code)
 	}
+}
+
+func TestAuthenticateModes(t *testing.T) {
+	me := func(t *testing.T, h http.Handler, user string) string {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/me", nil)
+		if user != "" {
+			req.SetBasicAuth(user, "p")
+		}
+		h.ServeHTTP(rec, req)
+		return strings.TrimSpace(rec.Body.String())
+	}
+
+	t.Run("local sans identifiants", func(t *testing.T) {
+		t.Setenv("AUTH_MODE", "")
+		t.Setenv("AUTH_USER", "")
+		h, err := authenticate(context.Background(), http.NewServeMux(), t.TempDir())
+		if err != nil || me(t, h, "") != `{"mode":"none"}` {
+			t.Fatalf("%v %s", err, me(t, h, ""))
+		}
+	})
+	t.Run("local Basic", func(t *testing.T) {
+		t.Setenv("AUTH_MODE", "local")
+		t.Setenv("AUTH_USER", "u")
+		t.Setenv("AUTH_PASSWORD", "p")
+		h, err := authenticate(context.Background(), http.NewServeMux(), t.TempDir())
+		if err != nil || !strings.Contains(me(t, h, "u"), `"mode":"local"`) {
+			t.Fatalf("%v %s", err, me(t, h, "u"))
+		}
+	})
+	t.Run("oidc sans émetteur", func(t *testing.T) {
+		t.Setenv("AUTH_MODE", "oidc")
+		t.Setenv("OIDC_ISSUER", "")
+		if _, err := authenticate(context.Background(), http.NewServeMux(), t.TempDir()); err == nil {
+			t.Fatal("configuration incomplète acceptée")
+		}
+	})
+	t.Run("mode inconnu", func(t *testing.T) {
+		t.Setenv("AUTH_MODE", "ldap")
+		if _, err := authenticate(context.Background(), http.NewServeMux(), t.TempDir()); err == nil {
+			t.Fatal("AUTH_MODE inconnu accepté")
+		}
+	})
 }
