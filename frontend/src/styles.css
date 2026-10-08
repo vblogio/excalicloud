@@ -245,6 +245,10 @@ button.danger:hover:not(:disabled) {
   cursor: col-resize;
   user-select: none;
 }
+.app.instant,
+.app.instant .drawer {
+  transition: none;
+}
 
 /* Poignée de redimensionnement, à cheval sur la bordure de l'explorateur. */
 .splitter {
@@ -258,7 +262,7 @@ button.danger:hover:not(:disabled) {
   cursor: col-resize;
   touch-action: none;
 }
-.drawer-open .splitter {
+.pinned.drawer-open .splitter {
   display: block;
 }
 .splitter::after {
@@ -546,6 +550,56 @@ li.active > .row {
   height: var(--ex-btn);
 }
 
+/* --- Explorateur non épinglé (bureau) : panneau flottant sur le canevas ------ */
+
+.peek-edge {
+  display: none;
+}
+@media (min-width: 769px) {
+  .app.unpinned,
+  .app.unpinned.drawer-open {
+    grid-template-columns: 0 1fr;
+  }
+  .unpinned .drawer {
+    position: fixed;
+    z-index: 20;
+    top: var(--topbar-h);
+    bottom: 0;
+    left: 0;
+    width: var(--drawer-w);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform 0.15s ease,
+      visibility 0.15s;
+    box-shadow: var(--ex-shadow-island);
+  }
+  .unpinned.drawer-open .drawer {
+    transform: none;
+    visibility: visible;
+  }
+  /* Clic hors du panneau : le referme sans agir sur le schéma. */
+  .unpinned.drawer-open .backdrop {
+    display: block;
+    position: fixed;
+    z-index: 15;
+    inset: var(--topbar-h) 0 0 0;
+  }
+  /* Bord gauche sensible au survol pour faire apparaître le panneau. */
+  .unpinned .peek-edge {
+    display: block;
+    position: fixed;
+    z-index: 16;
+    top: var(--topbar-h);
+    bottom: 0;
+    left: 0;
+    width: 6px;
+  }
+  .unpinned .peek-edge:hover {
+    background: linear-gradient(to right, var(--accent-soft), transparent);
+  }
+}
+
 /* --- Mobile : l'explorateur devient un tiroir superposé -------------------- */
 
 @media (max-width: 768px) {
@@ -585,7 +639,8 @@ li.active > .row {
     display: none;
   }
   .splitter,
-  .drawer-open .splitter {
+  .pinned.drawer-open .splitter,
+  .pin-btn {
     display: none;
   }
   .row .name {

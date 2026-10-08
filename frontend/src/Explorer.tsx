@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DragEvent, KeyboardEvent, MouseEvent } from "react";
+import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import {
   api,
   ApiError,
@@ -62,6 +62,8 @@ interface Props {
   onHistory: (path: string) => void;
   /** Affiche les liens de partage d'un schéma. */
   onShare: (path: string) => void;
+  /** Contenu ajouté au bout de la barre de recherche (bouton d'épinglage du panneau). */
+  toolbarEnd?: ReactNode;
 }
 
 type View = "list" | "grid";
@@ -88,7 +90,7 @@ const initialView = (): View => {
 const canMoveInto = (path: string, targetDir: string) =>
   dirname(path) !== targetDir && targetDir !== path && !targetDir.startsWith(path + "/");
 
-export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHistory, onShare }: Props) {
+export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHistory, onShare, toolbarEnd }: Props) {
   const [dir, setDir] = useState(() => (current ? dirname(current) : ""));
   const [entries, setEntries] = useState<Entry[]>([]);
   const [query, setQuery] = useState("");
@@ -642,6 +644,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
         <button className="icon-btn" onClick={refresh} title="Rafraîchir" aria-label="Rafraîchir">
           <RefreshIcon />
         </button>
+        {toolbarEnd}
       </div>
 
       <div className="filters" role="group" aria-label="Filtres">
