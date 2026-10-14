@@ -473,6 +473,11 @@ func UserFrom(ctx context.Context) *User {
 	return u
 }
 
+// WithUser renvoie ctx portant l'utilisateur u (authentification par jeton d'API).
+func WithUser(ctx context.Context, u *User) context.Context {
+	return context.WithValue(ctx, ctxKey{}, u)
+}
+
 // Session renvoie l'utilisateur du cookie de session s'il est valide.
 func (a *OIDC) session(r *http.Request) (session, bool) {
 	var s session

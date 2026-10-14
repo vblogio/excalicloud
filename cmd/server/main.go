@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path"
@@ -21,7 +22,9 @@ import (
 
 	"github.com/vblogio/excalidraw-go/internal/api"
 	"github.com/vblogio/excalidraw-go/internal/auth"
+	"github.com/vblogio/excalidraw-go/internal/mcp"
 	"github.com/vblogio/excalidraw-go/internal/storage"
+	"github.com/vblogio/excalidraw-go/internal/tokens"
 	"github.com/vblogio/excalidraw-go/internal/update"
 	"github.com/vblogio/excalidraw-go/web"
 )
@@ -92,6 +95,21 @@ func main() {
 	mux := http.NewServeMux()
 	spaces := storage.NewSpaces(store)
 	(&api.Handler{Store: store, Spaces: spaces, User: userID, MaxBody: maxMB << 20, Update: checker}).Register(mux)
+	// Jetons d'accès personnels et serveur OAuth, pour l'API et le serveur MCP.
+	tokenStore, err := tokens.Open(dataDir)
+	if err != nil {
+		slog.Error("jetons d'accès", "err", err)
+		os.Exit(1)
+	}
+	ts := &tokens.Server{
+		Store:         tokenStore,
+		PublicURL:     publicURL(),
+		UserID:        userID,
+		RedirectHosts: fields(env("OAUTH_REDIRECT_HOSTS", "claude.ai,claude.com")),
+		ResourcePaths: []string{"/mcp"},
+	}
+	ts.Register(mux)
+	mux.Handle("/mcp", &mcp.Server{Spaces: spaces, User: userID, BaseURL: ts.BaseURL, MaxBody: maxMB << 20, Version: "1.0"})
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})
@@ -102,7 +120,7 @@ func main() {
 		slog.Error("authentification", "err", err)
 		os.Exit(1)
 	}
-	h = logRequests(securityHeaders(h))
+	h = logRequests(securityHeaders(ts.Middleware(h, mux)))
 
 	srv := &http.Server{
 		Addr:              addr,
@@ -189,6 +207,18 @@ func userID(r *http.Request) string {
 		return storage.UserID("sub-" + u.Sub)
 	}
 	return storage.LocalUser
+}
+
+// publicURL est l'origine publique du service : PUBLIC_URL, sinon celle de
+// OIDC_REDIRECT_URL ; vide, elle est déduite de chaque requête.
+func publicURL() string {
+	if v := os.Getenv("PUBLIC_URL"); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	if u, err := url.Parse(os.Getenv("OIDC_REDIRECT_URL")); err == nil && u.Scheme != "" && u.Host != "" {
+		return u.Scheme + "://" + u.Host
+	}
+	return ""
 }
 
 // oidcConfig lit les variables OIDC_* et SESSION_*.
@@ -298,11 +328,12 @@ func spa() http.Handler {
 }
 
 // public indique les chemins servis sans authentification : sonde, schémas
-// partagés (/s/<jeton> et son API) et fichiers statiques du build (code de
-// l'application et polices, sans aucune donnée).
+// partagés (/s/<jeton> et son API), points d'entrée OAuth (métadonnées,
+// enregistrement, échange de jetons) et fichiers statiques du build (code de
+// l'application et polices, sans aucune donnée). /mcp exige un jeton.
 func public(p string) bool {
 	switch {
-	case p == "/healthz", strings.HasPrefix(p, "/s/"), strings.HasPrefix(p, "/api/public/"):
+	case p == "/healthz", strings.HasPrefix(p, "/s/"), strings.HasPrefix(p, "/api/public/"), tokens.IsPublic(p):
 		return true
 	case strings.HasPrefix(p, "/api/"), p == "/", p == "/index.html":
 		return false

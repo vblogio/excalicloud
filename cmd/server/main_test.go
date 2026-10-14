@@ -22,6 +22,12 @@ func TestBasicAuthPublicPaths(t *testing.T) {
 		"/api/publicx":        401,
 		"/assets/":            401, // dossier : pas un fichier statique
 		"/inconnu":            401,
+		"/.well-known/oauth-protected-resource/mcp": 200,
+		"/.well-known/oauth-authorization-server":   200,
+		"/oauth/register":                           200,
+		"/oauth/token":                              200,
+		"/oauth/authorize":                          401, // consentement : session requise
+		"/mcp":                                      401, // jeton requis (middleware des jetons)
 	}
 	for p, want := range cases {
 		rec := httptest.NewRecorder()
