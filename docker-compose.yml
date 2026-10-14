@@ -47,6 +47,13 @@ services:
       # Clé de signature des liens de partage /s/<jeton> (16 caractères min.).
       # Vide : clé aléatoire générée dans DATA_DIR/.share-secret.
       SHARE_SECRET: ${SHARE_SECRET:-}
+      # URL publique (ex. https://excalicloud.example.org) : identifiant de la
+      # ressource OAuth du serveur MCP (<PUBLIC_URL>/mcp). Vide : origine de
+      # OIDC_REDIRECT_URL, sinon déduite des en-têtes X-Forwarded-*.
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      # Hôtes autorisés pour les retours OAuth des connecteurs MCP (https) ;
+      # localhost (Claude Code) est toujours accepté.
+      OAUTH_REDIRECT_HOSTS: ${OAUTH_REDIRECT_HOSTS:-claude.ai,claude.com}
     volumes:
       # Volume nommé : les droits (uid 65532) sont hérités de l'image.
       # Pour un bind mount (ex. ./data:/data), faire `chown -R 65532:65532 ./data`.

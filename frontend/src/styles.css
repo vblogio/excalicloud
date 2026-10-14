@@ -1340,6 +1340,23 @@ button.chip.on,
   text-overflow: ellipsis;
   overflow-wrap: normal;
 }
+.token-create {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.token-create .text-input {
+  flex: 1;
+  min-width: 0;
+}
+.token-new {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: var(--ex-radius-lg);
+  border: 1px solid var(--warn);
+}
 @media (max-width: 768px) {
   .share-view .status.readonly {
     display: inline-flex;

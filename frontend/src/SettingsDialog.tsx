@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ApiAccess } from "./ApiAccess";
 import { api, type Channel, type Settings, type Share, type UpdateStatus } from "./api";
 import { CopyIcon, TrashIcon } from "./icons";
 import { fmtExpiry } from "./ShareDialog";
@@ -259,6 +260,8 @@ export function SettingsDialog({ settings, update, focusExcalidraw, onChange, on
             </button>
           )}
         </section>
+
+        <ApiAccess onError={setError} />
 
         {error && <div className="error">{error}</div>}
 

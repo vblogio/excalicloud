@@ -72,6 +72,16 @@ export interface Share {
   expires?: string;
 }
 
+/** Jeton d'accès à l'API et au serveur MCP (api : créé ici ; oauth : autorisé depuis un client). */
+export interface ApiToken {
+  id: string;
+  name: string;
+  kind: "api" | "oauth";
+  client?: string;
+  created: string;
+  lastUsed?: string;
+}
+
 /** Schéma partagé tel que servi sans authentification. */
 export interface PublicScene {
   name: string;
@@ -201,6 +211,16 @@ export const api = {
 
   revokeAllShares: async (): Promise<void> => {
     await request("/api/shares/revoke-all", { method: "POST" });
+  },
+
+  tokens: async (): Promise<ApiToken[]> => (await request("/api/tokens")).json(),
+
+  /** Le jeton en clair (token) n'est renvoyé qu'à la création. */
+  createToken: async (name: string): Promise<ApiToken & { token: string }> =>
+    (await request("/api/tokens", json({ name }))).json(),
+
+  revokeToken: async (id: string): Promise<void> => {
+    await request(`/api/tokens/${q(id)}`, { method: "DELETE" });
   },
 
   publicScene: async (token: string): Promise<PublicScene> =>

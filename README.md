@@ -1,6 +1,6 @@
 # excalidraw-go
 
-Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arborescence de dossiers, **vignettes des schémas**, création, renommage, **sélection et déplacement multiples** (glisser-déposer ou dialogue « Déplacer vers… »), duplication, suppression (corbeille), **recherche plein texte** (noms et contenu des schémas), **tags**, **espace personnel et favoris par utilisateur**, **partage en lecture seule par lien signé**, import/export de fichiers `.excalidraw`, sauvegarde automatique côté serveur, **historique des versions** avec comparaison visuelle et restauration. Interface web unique, responsive (l'explorateur devient un tiroir sur mobile).
+Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arborescence de dossiers, **vignettes des schémas**, création, renommage, **sélection et déplacement multiples** (glisser-déposer ou dialogue « Déplacer vers… »), duplication, suppression (corbeille), **recherche plein texte** (noms et contenu des schémas), **tags**, **espace personnel et favoris par utilisateur**, **partage en lecture seule par lien signé**, import/export de fichiers `.excalidraw`, sauvegarde automatique côté serveur, **historique des versions** avec comparaison visuelle et restauration, **serveur MCP** pour que Claude lise et crée des schémas (jetons d'API personnels et OAuth). Interface web unique, responsive (l'explorateur devient un tiroir sur mobile).
 
 - **Backend** : Go 1.24, bibliothèque standard uniquement (aucune dépendance externe), API REST/JSON, stockage en fichiers `.excalidraw` sur un volume.
 - **Frontend** : React 19 + composant officiel [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw) 0.18.1 (licence MIT), build Vite **embarqué dans le binaire Go** (`embed`).
@@ -14,6 +14,8 @@ Navigateur ──HTTP──▶ conteneur excalidraw-go (:8080, uid 65532, rootfs
                        ├─ /api/...     API fichiers (Go net/http)
                        ├─ /s/<jeton>   schéma partagé en lecture seule (hors authentification)
                        ├─ /auth/...    connexion OIDC (AUTH_MODE=oidc)
+                       ├─ /mcp         serveur MCP (jeton Bearer requis)
+                       ├─ /oauth/...   autorisation OAuth des clients MCP (claude.ai, Claude Desktop)
                        └─ /healthz     sonde
                               │
                               ▼
@@ -27,6 +29,7 @@ Navigateur ──HTTP──▶ conteneur excalidraw-go (:8080, uid 65532, rootfs
                          ├─ .users/<id>/favoris/x.excalidraw → ../../../projets/x.excalidraw ← favoris (liens symboliques)
                          ├─ .shares.json, .share-secret      ← liens de partage et clé de signature
                          ├─ .session-secret                  ← clé des sessions OIDC (si SESSION_SECRET vide)
+                         ├─ .tokens.json                     ← jetons d'API et autorisations OAuth (hachés SHA-256), clé HMAC
                          ├─ .history/projets/réseau/sdn.excalidraw/<date>.excalidraw ← versions
                          └─ .trash/<horodatage>/...         ← éléments supprimés
 ```
@@ -220,6 +223,38 @@ L'historique suit les renommages et déplacements ; à la suppression d'un sché
 
 Chaque lecture renvoie un `ETag` (SHA-256 tronqué du contenu) ; chaque sauvegarde l'envoie en `If-Match`. Si le fichier a été modifié ailleurs (autre onglet, autre poste), le serveur répond `412` et l'interface propose d'écraser ou de recharger. Il n'y a pas d'édition collaborative temps réel (voir *Évolutions*).
 
+## Accès MCP (Claude) et jetons d'API
+
+Le serveur expose un [serveur MCP](https://modelcontextprotocol.io) sur `https://<hôte>/mcp` (transport *Streamable HTTP*, réponses JSON) : Claude peut lister, rechercher, lire, créer ou remplacer des schémas et créer des dossiers, avec les droits de l'utilisateur qui l'a autorisé (arborescence commune, son `.perso`, ses favoris).
+
+| Outil | Rôle |
+|---|---|
+| `list_diagrams` | contenu d'un dossier (`recursive` : sous-dossiers, 500 entrées max) |
+| `search_diagrams` | recherche plein texte (noms, tags, texte), filtres tag et favoris |
+| `read_diagram` | éléments et `appState` d'un schéma (images embarquées omises par défaut) |
+| `write_diagram` | création, ou remplacement avec `overwrite: true` (version précédente conservée dans l'historique) ; renvoie le lien du schéma |
+| `create_folder` | création d'un dossier (et de ses parents) |
+
+`write_diagram` complète les éléments incomplets (id, seed, couleurs…) et accepte deux raccourcis de l'API *skeleton* d'Excalidraw : `"label": {"text": "…"}` sur une forme ou une flèche (texte lié, forme agrandie si le texte ne tient pas), et `"start"/"end": {"id": "…"}` sur une flèche (liaison aux formes, tracé calculé de bord à bord). Aucun outil ne supprime ni ne déplace.
+
+Chaque requête vers `/mcp` doit porter `Authorization: Bearer <jeton>`. Deux façons d'obtenir un jeton, gérées dans **Paramètres › Accès API et MCP** (liste, date de dernière utilisation, révocation) :
+
+- **Connecteur claude.ai, Claude Desktop, Claude mobile** : ces clients ne savent pas envoyer de jeton fixe (sauf en-têtes de requête, en bêta pour certaines organisations) ; ils utilisent OAuth. excalicloud embarque un petit serveur d'autorisation OAuth 2.1 (enregistrement dynamique RFC 7591, PKCE S256, rotation des jetons de rafraîchissement) adossé à la connexion existante (OIDC ou Basic) : *Paramètres › Connecteurs › Ajouter un connecteur personnalisé*, URL `https://<hôte>/mcp`, champs OAuth vides. Claude ouvre la page de connexion d'excalicloud puis une page de consentement ; l'accès apparaît ensuite dans la liste (« Connecteur autorisé (claude.ai) »). Jeton d'accès valable 1 h, autorisation expirée après 90 jours sans usage.
+- **Claude Code, scripts** : créer un **jeton personnel** (affiché une seule fois, sans expiration, révocable), puis :
+
+```bash
+claude mcp add --transport http excalicloud https://<hôte>/mcp \
+  --header "Authorization: Bearer exc_…"
+```
+
+Les jetons personnels valent aussi pour l'API REST (`curl -H "Authorization: Bearer exc_…" https://<hôte>/api/list`), sauf la gestion des jetons, réservée à la session de l'interface. Claude Code peut aussi passer par OAuth (`claude mcp add --transport http excalicloud https://<hôte>/mcp` sans en-tête, puis `/mcp` pour s'authentifier).
+
+Conditions côté exploitation :
+
+- `PUBLIC_URL` (ou à défaut l'origine de `OIDC_REDIRECT_URL`) doit être l'URL publique exacte : elle forme l'identifiant de ressource OAuth `<PUBLIC_URL>/mcp`. Vide, elle est déduite de `X-Forwarded-Proto`/`X-Forwarded-Host`.
+- Les connecteurs claude.ai/Desktop appellent le serveur **depuis l'infrastructure d'Anthropic** (plage `160.79.104.0/21`) : `/mcp`, `/.well-known/oauth-*` et `/oauth/*` doivent être joignables depuis Internet et, derrière un SSO porté par le proxy, exclus de son authentification (`/oauth/authorize` reste protégé par la session d'excalicloud).
+- `OAUTH_REDIRECT_HOSTS` (défaut `claude.ai,claude.com`) limite les adresses de retour OAuth en https ; les adresses de bouclage (`http://localhost:<port>`, Claude Code) sont toujours acceptées.
+
 ## API
 
 Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants commençant par `.` sont refusés, et les liens symboliques sortant de la racine sont bloqués. Deux préfixes virtuels, propres à l'utilisateur de la requête : `.perso/…` (son espace personnel) et `.favoris` (`GET /api/list?path=.favoris` liste ses favoris, `path` = chemin de l'original, `link` = nom du lien ; `DELETE /api/entry?path=.favoris/<lien>` retire le lien). La racine (`path=`) commence par les entrées `{"special":"favoris"}` et `{"special":"perso"}`.
@@ -256,6 +291,13 @@ Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants co
 | PUT | `/api/logo` | PNG (5 Mo, 8192×8192 px max) | réglages ; image recadrée et ré-encodée |
 | DELETE | `/api/logo` | | réglages |
 | GET | `/api/update` | | `{"enabled","tags":{"latest","next"},"latest","checkedAt"}` |
+| GET | `/api/tokens` | | `[{"id","name","kind":"api"\|"oauth","client","created","lastUsed"}]` : jetons de l'utilisateur |
+| POST | `/api/tokens` | `{"name":"Claude Code"}` | `201`, jeton + `"token"` en clair (seule fois où il est renvoyé) |
+| DELETE | `/api/tokens/<id>` | | `204` (jeton ou autorisation OAuth révoqués) |
+| POST | `/mcp` | JSON-RPC 2.0 (MCP) + `Authorization: Bearer` | serveur MCP ; `401` + `WWW-Authenticate: Bearer resource_metadata=…` sans jeton |
+| GET | `/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server` | | métadonnées OAuth (RFC 9728, RFC 8414), hors authentification |
+| POST | `/oauth/register`, `/oauth/token` | | enregistrement dynamique et échange de jetons, hors authentification |
+| GET/POST | `/oauth/authorize` | | page de consentement (session requise) |
 | GET | `/api/me` | | `{"mode":"none"\|"local"\|"oidc","user":{"sub","name","email"},"logout","id"}` ; `id` : identifiant de l'espace personnel |
 | GET | `/auth/login?next=/chemin` | | mode `oidc` : redirection vers le fournisseur |
 | GET | `/auth/callback` | | mode `oidc` : retour du fournisseur, ouverture de session |
@@ -293,6 +335,8 @@ internal/auth/              OIDC (PKCE, vérification de l'ID Token, JWKS) et se
 internal/storage/           accès disque : sécurité des chemins, écriture atomique, ETag, corbeille, historique
 internal/storage/spaces.go  espaces personnels (.perso) et favoris par utilisateur (.favoris, liens symboliques)
 internal/api/               routes REST
+internal/tokens/            jetons d'API (hachés), authentification Bearer, serveur d'autorisation OAuth 2.1
+internal/mcp/               serveur MCP (JSON-RPC, outils, normalisation des éléments Excalidraw)
 web/embed.go                embarque web/dist (produit par le build Vite)
 frontend/src/App.tsx        éditeur Excalidraw, sauvegarde auto, conflits, bibliothèque
 frontend/src/Explorer.tsx   gestionnaire de fichiers (vignettes/liste, sélection multiple, glisser-déposer)
@@ -304,6 +348,7 @@ frontend/src/TagsDialog.tsx tags d'un ou plusieurs éléments
 frontend/src/ShareDialog.tsx liens de partage d'un schéma
 frontend/src/ShareView.tsx  vue publique /s/<jeton> (lecture seule)
 frontend/src/UserMenu.tsx   cartouche oidc/local + identifiant, déconnexion (mode OIDC)
+frontend/src/ApiAccess.tsx  paramètres : adresse MCP, jetons personnels et connecteurs autorisés
 ```
 
 ## Sécurité
@@ -312,6 +357,7 @@ frontend/src/UserMenu.tsx   cartouche oidc/local + identifiant, déconnexion (mo
 - L'authentification Basic (`AUTH_MODE=local`) suffit pour un usage local ; en exposition réseau, utiliser `AUTH_MODE=oidc` derrière un reverse proxy TLS (Traefik, Caddy, nginx), ou un SSO porté par le proxy (Authelia, oauth2-proxy, Authentik outpost) avec `AUTH_MODE=local` et `AUTH_*` vides.
 - Écritures atomiques (fichier temporaire + `fsync` + `rename`) : pas de schéma tronqué en cas d'arrêt brutal.
 - Liens de partage : seule surface accessible sans authentification ; jetons non énumérables (id 128 bits signé HMAC), révocables, à durée limitée au choix. Un lien donne la dernière version enregistrée du schéma, images embarquées comprises.
+- Jetons d'API : 256 bits aléatoires, conservés hachés (SHA-256) dans `.tokens.json` (0600), rattachés à un utilisateur, révocables ; un jeton ne peut pas gérer les jetons. OAuth : client public avec PKCE S256 obligatoire, code à usage unique (5 min), formulaire de consentement signé (HMAC, lié à l'utilisateur), redirections limitées à `OAUTH_REDIRECT_HOSTS` et au bouclage. Le serveur MCP n'offre ni suppression ni déplacement ; un remplacement laisse la version précédente dans l'historique.
 - Aucune suppression physique : la purge de `.trash/` est à la charge de l'exploitant (ex. `find /data/.trash -mindepth 1 -maxdepth 1 -mtime +30 -exec rm -rf {} +`).
 
 ## Limites et évolutions possibles
