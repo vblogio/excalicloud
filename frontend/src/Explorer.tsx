@@ -19,17 +19,22 @@ import {
 import {
   CloseIcon,
   DeselectIcon,
+  CopyIcon,
   DotsIcon,
+  DownloadIcon,
+  EditIcon,
   FilePlusIcon,
   FolderIcon,
   FolderPlusIcon,
   FolderUploadIcon,
   GridIcon,
+  HistoryIcon,
   ListIcon,
   MoveIcon,
   RefreshIcon,
   SearchIcon,
   SelectAllIcon,
+  ShareIcon,
   StarFilledIcon,
   StarIcon,
   TagIcon,
@@ -38,6 +43,7 @@ import {
   UploadIcon,
   UserIcon,
 } from "./icons";
+import { ActionMenu } from "./ActionMenu";
 import { collectDrop, collectFiles, hasFiles, type Collected } from "./importer";
 import { MoveDialog } from "./MoveDialog";
 import { TagsDialog } from "./TagsDialog";
@@ -102,7 +108,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   const [view, setView] = useState<View>(initialView);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [anchor, setAnchor] = useState<string | null>(null); // origine d'une sélection Maj+clic
-  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ entry: Hit; anchor: HTMLElement } | null>(null); // menu « … » ouvert
   const [moving, setMoving] = useState<string[] | null>(null); // éléments du dialogue « Déplacer vers »
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +128,10 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   // Dossier Favoris : des liens vers les originaux, ni création ni déplacement.
   const favView = !results && inFavoris(dir);
 
+  const closeMenu = useCallback(() => setMenu(null), []);
+  // La liste change de forme : le bouton « … » d'origine disparaît.
+  useEffect(closeMenu, [view, dir, results, closeMenu]);
+
   const guard = useCallback(async (fn: () => Promise<unknown>) => {
     setError(null);
     try {
@@ -139,7 +149,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
         setTags(tagList);
         // Tag filtré qui n'existe plus : filtre retiré.
         setTagFilter((t) => (t && tagList.some((x) => x.name === t) ? t : null));
-        setMenuFor(null);
+        setMenu(null);
         // Oublie les éléments sélectionnés qui ont disparu.
         setSelected((s) => {
           if (s.size === 0) return s;
@@ -309,7 +319,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
         files.map((e) => e.path),
         fav,
       );
-      setMenuFor(null);
+      setMenu(null);
       if (favView) clearSelection();
       await reload();
     });
@@ -497,55 +507,90 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
 
   // Dans Favoris : actions sur l'original, retrait du lien à la place de la suppression.
   const favActions = (e: Entry) => (
-    <div className="actions">
+    <>
       {!e.broken && (
         <>
-          <button onClick={() => setDir(dirname(e.path))}>Ouvrir l'emplacement</button>
-          <button onClick={() => onHistory(e.path)}>Historique…</button>
-          <button onClick={() => onShare(e.path)}>Partager…</button>
-          <button onClick={() => setTagging([e])}>
+          <button role="menuitem" onClick={() => setDir(dirname(e.path))}>
+            <FolderIcon />
+            Ouvrir l'emplacement
+          </button>
+          <button role="menuitem" onClick={() => onHistory(e.path)}>
+            <HistoryIcon />
+            Historique…
+          </button>
+          <button role="menuitem" onClick={() => onShare(e.path)}>
+            <ShareIcon />
+            Partager…
+          </button>
+          <button role="menuitem" onClick={() => setTagging([e])}>
             <TagIcon />
             Tags…
           </button>
-          <a href={api.downloadUrl(e.path)} download={e.name}>
+          <a role="menuitem" href={api.downloadUrl(e.path)} download={e.name}>
+            <DownloadIcon />
             Télécharger
           </a>
+          <hr />
         </>
       )}
-      <button className="danger" onClick={() => removeMany([e.path])}>
+      <button role="menuitem" className="danger" onClick={() => removeMany([e.path])}>
         <StarIcon />
         Retirer des favoris
       </button>
-    </div>
+    </>
   );
 
   const actions = (e: Entry) => (
-    <div className="actions">
-      <button onClick={() => rename(e)}>Renommer</button>
-      <button onClick={() => setMoving([e.path])}>Déplacer…</button>
-      {!e.isDir && <button onClick={() => duplicate(e)}>Dupliquer</button>}
-      {!e.isDir && <button onClick={() => onHistory(e.path)}>Historique…</button>}
-      {!e.isDir && <button onClick={() => onShare(e.path)}>Partager…</button>}
+    <>
+      <button role="menuitem" onClick={() => rename(e)}>
+        <EditIcon />
+        Renommer
+      </button>
+      <button role="menuitem" onClick={() => setMoving([e.path])}>
+        <MoveIcon />
+        Déplacer…
+      </button>
       {!e.isDir && (
-        <button onClick={() => toggleFavorite([e])}>
+        <button role="menuitem" onClick={() => duplicate(e)}>
+          <CopyIcon />
+          Dupliquer
+        </button>
+      )}
+      {!e.isDir && (
+        <button role="menuitem" onClick={() => onHistory(e.path)}>
+          <HistoryIcon />
+          Historique…
+        </button>
+      )}
+      {!e.isDir && (
+        <button role="menuitem" onClick={() => onShare(e.path)}>
+          <ShareIcon />
+          Partager…
+        </button>
+      )}
+      {!e.isDir && (
+        <button role="menuitem" onClick={() => toggleFavorite([e])}>
           {e.favorite ? <StarFilledIcon /> : <StarIcon />}
           {e.favorite ? "Retirer des favoris" : "Favori"}
         </button>
       )}
-      <button onClick={() => setTagging([e])}>
+      <button role="menuitem" onClick={() => setTagging([e])}>
         <TagIcon />
         Tags…
       </button>
       {!e.isDir && (
-        <a href={api.downloadUrl(e.path)} download={e.name}>
+        <a role="menuitem" href={api.downloadUrl(e.path)} download={e.name}>
+          <DownloadIcon />
           Télécharger
         </a>
       )}
-      <button className="danger" onClick={() => removeMany([e.path])}>
+      <hr />
+      <button role="menuitem" className="danger" onClick={() => removeMany([e.path])}>
+        <TrashIcon />
         Supprimer
       </button>
-      {!e.isDir && <span className="muted">{fmtSize(e.size)}</span>}
-    </div>
+      {!e.isDir && <span className="muted size">{fmtSize(e.size)}</span>}
+    </>
   );
 
   const item = (e: Hit) => {
@@ -559,7 +604,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
       e.broken ? "broken" : "",
       dropTarget === e.path ? "drop" : "",
     ].join(" ");
-    return [
+    return (
       <li key={e.path} className={cls}>
         <div
           className="row"
@@ -617,24 +662,22 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
           {!e.isDir && view === "list" && <span className="meta muted">{fmtDate(e.modTime)}</span>}
           {!e.special && (
           <button
-            className="icon-btn more"
+            className={`icon-btn more ${menu?.entry.path === e.path ? "open" : ""}`}
             aria-label="Actions"
+            aria-haspopup="menu"
+            aria-expanded={menu?.entry.path === e.path}
             title="Actions"
-            onClick={() => setMenuFor(menuFor === e.path ? null : e.path)}
+            onClick={(ev) => {
+              const anchor = ev.currentTarget;
+              setMenu((m) => (m?.entry.path === e.path ? null : { entry: e, anchor }));
+            }}
           >
             <DotsIcon />
           </button>
           )}
         </div>
-        {view === "list" && menuFor === e.path && (favView ? favActions(e) : actions(e))}
-      </li>,
-      // En grille, le menu occupe toute la largeur sous la vignette.
-      view === "grid" && menuFor === e.path && (
-        <li key={`${e.path}#menu`} className="menu-row">
-          {favView ? favActions(e) : actions(e)}
-        </li>
-      ),
-    ];
+      </li>
+    );
   };
 
   return (
@@ -832,7 +875,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
             </div>
           </li>
         )}
-        {list.flatMap(item)}
+        {list.map(item)}
         {list.length === 0 && (
           <li className="muted empty">
             {results ? "Aucun résultat" : favView ? "Aucun favori : étoile ou glisser-déposer un schéma ici" : "Dossier vide"}
@@ -855,6 +898,12 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
           onChanged={reload}
           onClose={() => setTagging(null)}
         />
+      )}
+
+      {menu && (
+        <ActionMenu anchor={menu.anchor} onClose={closeMenu}>
+          {favView ? favActions(menu.entry) : actions(menu.entry)}
+        </ActionMenu>
       )}
 
       {moving && (

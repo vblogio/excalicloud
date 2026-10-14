@@ -550,6 +550,64 @@ li.active > .row {
   height: var(--ex-btn);
 }
 
+/* Menu « … » d'un élément : liste déroulante, comme les menus d'Excalidraw. */
+.icon-btn.more.open {
+  background: var(--ex-surface-high);
+}
+.menu-popup {
+  position: fixed;
+  z-index: 40; /* au-dessus du tiroir et du panneau flottant, sous les dialogues */
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 190px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--panel);
+  border-radius: var(--ex-radius-lg);
+  box-shadow: var(--ex-shadow-island), 0 0 0 1px var(--border);
+}
+.menu-popup button,
+.menu-popup a {
+  justify-content: flex-start;
+  width: 100%;
+  padding: 0 0.625rem;
+  font-size: 0.8125rem;
+  background: transparent;
+  box-shadow: none;
+}
+.menu-popup button:hover:not(:disabled),
+.menu-popup a:hover,
+.menu-popup button:focus-visible,
+.menu-popup a:focus-visible {
+  background: var(--ex-surface-high);
+  outline: none;
+}
+.menu-popup .danger:hover:not(:disabled),
+.menu-popup .danger:focus-visible {
+  background: var(--ex-danger-bg);
+}
+.menu-popup hr {
+  width: 100%;
+  margin: 4px 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+.menu-popup .size {
+  padding: 4px 0.625rem 0;
+  font-size: 11px;
+}
+@media (hover: none) {
+  /* Tactile : cibles plus hautes. */
+  .menu-popup button,
+  .menu-popup a {
+    height: 2.5rem;
+  }
+}
+
 /* --- Explorateur non épinglé (bureau) : panneau flottant sur le canevas ------ */
 
 .peek-edge {
@@ -759,8 +817,7 @@ li.active > .row {
   gap: 6px;
   align-content: start;
 }
-.entries.grid > .empty,
-.entries.grid > .menu-row {
+.entries.grid > .empty {
   grid-column: 1 / -1;
 }
 .entries.grid .row {
@@ -819,6 +876,7 @@ li.active > .row {
   opacity: 0;
 }
 .entries.grid .item:hover .more,
+.entries.grid .more.open,
 .entries.grid .more:focus-visible {
   opacity: 1;
 }
@@ -826,9 +884,6 @@ li.active > .row {
   .entries.grid .more {
     opacity: 1;
   }
-}
-.entries.grid .actions {
-  padding: 4px 2px 8px;
 }
 
 .drag-ghost {
