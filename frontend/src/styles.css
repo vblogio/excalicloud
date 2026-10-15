@@ -1302,7 +1302,7 @@ button.chip.on,
   order: 10;
   flex-basis: 100%;
   margin-top: -4px;
-  padding: 0 6px 5px 82px;
+  padding: 0 6px 5px 76px;
 }
 .row .tags .chip {
   height: 18px;
@@ -1434,6 +1434,10 @@ button.chip.on,
    que l'icône s'aligne sur celles des dossiers. */
 .entries.list .item.special > .row {
   padding-left: 24px;
+}
+/* Vue liste : case à cocher plus proche de l'icône. */
+.entries.list .row .name {
+  padding-left: 0;
 }
 /* Favori dont l'original a disparu : barré, seul « Retirer » reste possible. */
 .item.broken .label {
