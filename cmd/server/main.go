@@ -20,13 +20,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vblogio/excalidraw-go/internal/api"
-	"github.com/vblogio/excalidraw-go/internal/auth"
-	"github.com/vblogio/excalidraw-go/internal/mcp"
-	"github.com/vblogio/excalidraw-go/internal/storage"
-	"github.com/vblogio/excalidraw-go/internal/tokens"
-	"github.com/vblogio/excalidraw-go/internal/update"
-	"github.com/vblogio/excalidraw-go/web"
+	"github.com/vblogio/excalicloud/internal/api"
+	"github.com/vblogio/excalicloud/internal/auth"
+	"github.com/vblogio/excalicloud/internal/mcp"
+	"github.com/vblogio/excalicloud/internal/storage"
+	"github.com/vblogio/excalicloud/internal/tokens"
+	"github.com/vblogio/excalicloud/internal/update"
+	"github.com/vblogio/excalicloud/web"
 )
 
 func env(key, def string) string {

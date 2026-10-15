@@ -15,7 +15,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/vblogio/excalidraw-go/internal/update"
+	"github.com/vblogio/excalicloud/internal/update"
 )
 
 // Paramètres de l'interface (titre, logo, canal d'Excalidraw) et rétention de

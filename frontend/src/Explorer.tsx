@@ -59,7 +59,7 @@ import { Thumb } from "./Thumb";
 export const EMPTY_SCENE = JSON.stringify({
   type: "excalidraw",
   version: 2,
-  source: "excalidraw-go",
+  source: "excalicloud",
   elements: [],
   appState: {},
   files: {},

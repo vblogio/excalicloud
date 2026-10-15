@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/vblogio/excalidraw-go/internal/storage"
+	"github.com/vblogio/excalicloud/internal/storage"
 )
 
 // Versions du protocole acceptées, la plus récente d'abord.

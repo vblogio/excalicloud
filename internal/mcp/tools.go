@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vblogio/excalidraw-go/internal/storage"
+	"github.com/vblogio/excalicloud/internal/storage"
 )
 
 const instructions = `Excalicloud stocke des schémas Excalidraw (.excalidraw) dans une arborescence de dossiers partagée entre les utilisateurs.

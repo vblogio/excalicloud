@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/vblogio/excalidraw-go/internal/auth"
+	"github.com/vblogio/excalicloud/internal/auth"
 )
 
 // Server expose les jetons en HTTP : authentification Bearer, gestion des

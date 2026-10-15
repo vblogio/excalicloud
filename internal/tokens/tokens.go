@@ -22,7 +22,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/vblogio/excalidraw-go/internal/auth"
+	"github.com/vblogio/excalicloud/internal/auth"
 )
 
 const (

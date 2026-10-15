@@ -1,4 +1,4 @@
-# excalidraw-go
+# Excalicloud
 
 Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arborescence de dossiers, **vignettes des schémas**, création, renommage, **sélection et déplacement multiples** (glisser-déposer ou dialogue « Déplacer vers… »), duplication, suppression (corbeille), **recherche plein texte** (noms et contenu des schémas), **tags**, **espace personnel et favoris par utilisateur**, **partage en lecture seule par lien signé**, import/export de fichiers `.excalidraw`, sauvegarde automatique côté serveur, **historique des versions** avec comparaison visuelle et restauration, **serveur MCP** pour que Claude lise et crée des schémas (jetons d'API personnels et OAuth). Interface web unique, responsive (l'explorateur devient un tiroir sur mobile).
 
@@ -12,7 +12,7 @@ Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arbor
 ## Architecture
 
 ```
-Navigateur ──HTTP──▶ conteneur excalidraw-go (:8080, uid 65532, rootfs read-only)
+Navigateur ──HTTP──▶ conteneur excalicloud (:8080, uid 65532, rootfs read-only)
                        ├─ /            SPA React + Excalidraw (embarquée dans le binaire)
                        ├─ /api/...     API fichiers (Go net/http)
                        ├─ /s/<jeton>   schéma partagé en lecture seule (hors authentification)
@@ -371,6 +371,6 @@ frontend/src/ApiAccess.tsx  paramètres : adresse MCP, jetons personnels et conn
 
 ## Licence / License
 
-**Français.** Le code d'excalidraw-go est publié sous licence MIT : voir [`LICENSE`](LICENSE) (texte qui fait foi, en anglais) et sa traduction informative [`LICENSE.fr.md`](LICENSE.fr.md). Ce projet est indépendant : il n'est ni affilié à Excalidraw ou Excalidraw s.r.o., ni approuvé ou soutenu par eux. « Excalidraw » est une marque de son titulaire, citée uniquement pour indiquer la compatibilité. Le projet intègre et redistribue des composants tiers sous leurs propres licences, notamment Excalidraw (MIT), les icônes Tabler (MIT) et les polices fournies avec Excalidraw (SIL Open Font License 1.1, MIT) : la liste complète et les notices figurent dans [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+**Français.** Le code d'Excalicloud est publié sous licence MIT : voir [`LICENSE`](LICENSE) (texte qui fait foi, en anglais) et sa traduction informative [`LICENSE.fr.md`](LICENSE.fr.md). Ce projet est indépendant : il n'est ni affilié à Excalidraw ou Excalidraw s.r.o., ni approuvé ou soutenu par eux. « Excalidraw » est une marque de son titulaire, citée uniquement pour indiquer la compatibilité. Le projet intègre et redistribue des composants tiers sous leurs propres licences, notamment Excalidraw (MIT), les icônes Tabler (MIT) et les polices fournies avec Excalidraw (SIL Open Font License 1.1, MIT) : la liste complète et les notices figurent dans [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
-**English.** excalidraw-go is released under the MIT License: see [`LICENSE`](LICENSE). This is an independent project, not affiliated with, endorsed by or sponsored by Excalidraw or Excalidraw s.r.o. "Excalidraw" is a trademark of its owner, used only to describe compatibility. The project embeds and redistributes third-party components under their own licenses, including Excalidraw (MIT), Tabler Icons (MIT) and the fonts shipped with Excalidraw (SIL Open Font License 1.1, MIT): see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the full list and notices.
+**English.** Excalicloud is released under the MIT License: see [`LICENSE`](LICENSE). This is an independent project, not affiliated with, endorsed by or sponsored by Excalidraw or Excalidraw s.r.o. "Excalidraw" is a trademark of its owner, used only to describe compatibility. The project embeds and redistributes third-party components under their own licenses, including Excalidraw (MIT), Tabler Icons (MIT) and the fonts shipped with Excalidraw (SIL Open Font License 1.1, MIT): see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the full list and notices.

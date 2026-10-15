@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vblogio/excalidraw-go/internal/storage"
+	"github.com/vblogio/excalicloud/internal/storage"
 )
 
 const doc = `{"type":"excalidraw","version":2,"elements":[]}`

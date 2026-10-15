@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vblogio/excalidraw-go/internal/auth"
+	"github.com/vblogio/excalicloud/internal/auth"
 )
 
 // newServer monte le serveur de jetons devant un mux de test : /whoami

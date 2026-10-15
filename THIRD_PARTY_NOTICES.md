@@ -6,7 +6,7 @@
 
 ## English
 
-This project (excalidraw-go / Excalicloud) is an independent project. It is **not affiliated with, endorsed by or sponsored by Excalidraw** or Excalidraw s.r.o. "Excalidraw" is a trademark of its owner and is used here only to describe compatibility: this project embeds the open source [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw) component.
+This project (Excalicloud) is an independent project. It is **not affiliated with, endorsed by or sponsored by Excalidraw** or Excalidraw s.r.o. "Excalidraw" is a trademark of its owner and is used here only to describe compatibility: this project embeds the open source [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw) component.
 
 The project's own code is released under the MIT License (see [`LICENSE`](LICENSE)). The Docker image and the Go binary also redistribute the third-party components listed below, each under its own license.
 
@@ -119,7 +119,7 @@ The final Docker image is based on `gcr.io/distroless/static-debian12` (Apache-2
 
 ## Français
 
-Ce projet (excalidraw-go / Excalicloud) est un projet indépendant. Il **n'est ni affilié à Excalidraw ou Excalidraw s.r.o., ni approuvé ou soutenu par eux**. « Excalidraw » est une marque de son titulaire, citée ici uniquement pour décrire la compatibilité : le projet intègre le composant open source [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw).
+Ce projet (Excalicloud) est un projet indépendant. Il **n'est ni affilié à Excalidraw ou Excalidraw s.r.o., ni approuvé ou soutenu par eux**. « Excalidraw » est une marque de son titulaire, citée ici uniquement pour décrire la compatibilité : le projet intègre le composant open source [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw).
 
 Le code propre au projet est publié sous licence MIT (voir [`LICENSE`](LICENSE), traduction informative dans [`LICENSE.fr.md`](LICENSE.fr.md)). L'image Docker et le binaire Go redistribuent aussi les composants tiers suivants, chacun sous sa propre licence. Les textes de licence reproduits dans la section anglaise ci-dessus sont ceux qui font foi.
 

@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vblogio/excalidraw-go/internal/auth"
+	"github.com/vblogio/excalicloud/internal/auth"
 )
 
 // Serveur d'autorisation OAuth 2.1 minimal, pour les clients MCP qui ne savent

@@ -8,7 +8,7 @@ services:
         # Vide : version figée dans frontend/package-lock.json. Renseignée (dans .env
         # ou en ligne de commande), l'image est reconstruite avec cette version.
         EXCALIDRAW_VERSION: ${EXCALIDRAW_VERSION:-}
-    image: excalidraw-go:local
+    image: excalicloud:local
     restart: unless-stopped
 #    ports:
 #      - "${EXCALIDRAW_PORT:-8080}:8080"

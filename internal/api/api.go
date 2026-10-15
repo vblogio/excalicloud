@@ -48,8 +48,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vblogio/excalidraw-go/internal/storage"
-	"github.com/vblogio/excalidraw-go/internal/update"
+	"github.com/vblogio/excalicloud/internal/storage"
+	"github.com/vblogio/excalicloud/internal/update"
 )
 
 // Handler regroupe les routes de l'API.
