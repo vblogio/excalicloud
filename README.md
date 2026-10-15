@@ -9,6 +9,12 @@ Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arbor
 > Projet indépendant, non affilié à Excalidraw ni approuvé par Excalidraw s.r.o. ; il utilise le composant open source `@excalidraw/excalidraw` (MIT). Voir [Licence](#licence--license).
 > *Independent project, not affiliated with or endorsed by Excalidraw; it uses the open source `@excalidraw/excalidraw` component (MIT). See [License](#licence--license).*
 
+## Exemple visuel de fonctionnement
+
+Explorateur (espace personnel, vignettes) à gauche, schéma ouvert dans l'éditeur Excalidraw à droite, en thème sombre et authentification OIDC.
+
+![Excalicloud : explorateur de fichiers et schéma ouvert dans l'éditeur](docs/exemple-excalicloud.jpg)
+
 ## Architecture
 
 ```
