@@ -768,6 +768,7 @@ li.active > .row {
 .item.selected > .row {
   background: var(--accent-soft);
   outline: 1px solid var(--accent);
+  outline-offset: -1px; /* à l'intérieur : l'overflow de la liste coupait le bord gauche */
 }
 .entries .item.up .row {
   padding-left: 20px;
