@@ -7,14 +7,16 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf8"
 )
 
-// Tags et favoris des fichiers et dossiers, dans .meta.json à la racine :
-// {"items":{"a/b.excalidraw":{"tags":["NSX"],"favorite":true}}}. Ils suivent
-// les renommages, déplacements et suppressions.
+// Tags et favoris des fichiers et dossiers, et icône des dossiers, dans
+// .meta.json à la racine :
+// {"items":{"a/b.excalidraw":{"tags":["NSX"],"favorite":true},"a":{"icon":"server"}}}.
+// Ils suivent les renommages, déplacements et suppressions.
 
 const metaFile = ".meta.json"
 
@@ -28,9 +30,14 @@ const (
 type itemMeta struct {
 	Tags     []string `json:"tags,omitempty"`
 	Favorite bool     `json:"favorite,omitempty"`
+	Icon     string   `json:"icon,omitempty"` // dossiers : nom d'icône du frontend
 }
 
-func (m itemMeta) empty() bool { return len(m.Tags) == 0 && !m.Favorite }
+func (m itemMeta) empty() bool { return len(m.Tags) == 0 && !m.Favorite && m.Icon == "" }
+
+// iconName : nom d'icône accepté (le frontend affiche le dossier classique
+// pour un nom qu'il ne connaît pas).
+var iconName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
 
 // TagCount est un tag utilisé et son nombre d'éléments.
 type TagCount struct {
@@ -94,6 +101,9 @@ func (s *Store) metaSnapshot() map[string]itemMeta {
 func decorate(e *Entry, meta map[string]itemMeta) {
 	if m, ok := meta[e.Path]; ok {
 		e.Tags, e.Favorite = m.Tags, m.Favorite
+		if e.IsDir {
+			e.Icon = m.Icon
+		}
 	}
 }
 
@@ -145,6 +155,28 @@ func (s *Store) editMeta(paths []string, edit func(*itemMeta) error) error {
 func (s *Store) SetFavorite(paths []string, favorite bool) error {
 	return s.editMeta(paths, func(m *itemMeta) error {
 		m.Favorite = favorite
+		return nil
+	})
+}
+
+// SetIcon choisit l'icône de dossiers ; icon = "" rétablit l'icône par défaut.
+func (s *Store) SetIcon(paths []string, icon string) error {
+	if icon != "" && !iconName.MatchString(icon) {
+		return fmt.Errorf("%w : icône %q", ErrInvalidPath, icon)
+	}
+	for _, p := range paths {
+		_, abs, err := s.resolve(p)
+		if err != nil {
+			return err
+		}
+		if fi, err := os.Lstat(abs); err != nil {
+			return mapErr(err)
+		} else if !fi.IsDir() {
+			return fmt.Errorf("%w : %q n'est pas un dossier", ErrInvalidPath, p)
+		}
+	}
+	return s.editMeta(paths, func(m *itemMeta) error {
+		m.Icon = icon
 		return nil
 	})
 }

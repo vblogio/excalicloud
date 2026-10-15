@@ -5,6 +5,7 @@
 //	GET    /api/tags                     tags utilisés et nombre d'éléments
 //	POST   /api/meta/favorite {"paths":[...],"favorite":true}  favoris
 //	POST   /api/meta/tags {"paths":[...],"add":[...],"remove":[...]} tags
+//	POST   /api/meta/icon {"paths":[...],"icon":"server"} icône de dossiers ("" : défaut)
 //	GET    /api/file?path=a/b.excalidraw lecture (ETag en en-tête)
 //	PUT    /api/file?path=a/b.excalidraw écriture (If-Match / If-None-Match: *)
 //	POST   /api/folder   {"path":"a/b"}           création de dossier
@@ -78,6 +79,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/tags", h.tags)
 	mux.HandleFunc("POST /api/meta/favorite", h.setFavorite)
 	mux.HandleFunc("POST /api/meta/tags", h.editTags)
+	mux.HandleFunc("POST /api/meta/icon", h.setIcon)
 	mux.HandleFunc("GET /api/file", h.readFile)
 	mux.HandleFunc("PUT /api/file", h.writeFile)
 	mux.HandleFunc("POST /api/folder", h.mkdir)
@@ -205,6 +207,7 @@ type metaReq struct {
 	Favorite bool     `json:"favorite"`
 	Add      []string `json:"add"`
 	Remove   []string `json:"remove"`
+	Icon     string   `json:"icon"`
 }
 
 func (h *Handler) decodeMeta(w http.ResponseWriter, r *http.Request) (metaReq, bool) {
@@ -245,6 +248,22 @@ func (h *Handler) editTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := u.EditTags(req.Paths, req.Add, req.Remove); err != nil {
+		fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) setIcon(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
+	req, ok := h.decodeMeta(w, r)
+	if !ok {
+		return
+	}
+	if err := u.SetIcon(req.Paths, req.Icon); err != nil {
 		fail(w, err)
 		return
 	}

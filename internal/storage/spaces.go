@@ -555,6 +555,24 @@ func (u *Space) EditTags(paths, add, remove []string) error {
 	return nil
 }
 
+// SetIcon choisit l'icône de dossiers (voir Store.SetIcon).
+func (u *Space) SetIcon(paths []string, icon string) error {
+	groups := map[*Store][]string{}
+	for _, p := range paths {
+		st, rel, err := u.route(p)
+		if err != nil {
+			return err
+		}
+		groups[st] = append(groups[st], rel)
+	}
+	for st, rels := range groups {
+		if err := st.SetIcon(rels, icon); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (u *Space) Read(p string) ([]byte, string, error) {
 	st, rel, err := u.route(p)
 	if err != nil {

@@ -44,6 +44,8 @@ import {
   UserIcon,
 } from "./icons";
 import { ActionMenu } from "./ActionMenu";
+import { FolderGlyph } from "./folderIcons";
+import { IconDialog } from "./IconDialog";
 import { collectDrop, collectFiles, hasFiles, type Collected } from "./importer";
 import { MoveDialog } from "./MoveDialog";
 import { TagsDialog } from "./TagsDialog";
@@ -118,6 +120,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   const [tags, setTags] = useState<TagCount[]>([]);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [tagging, setTagging] = useState<Entry[] | null>(null); // éléments du dialogue « Tags »
+  const [iconing, setIconing] = useState<Entry[] | null>(null); // dossiers du dialogue « Icône »
   const fileInput = useRef<HTMLInputElement>(null);
   const dirInput = useRef<HTMLInputElement>(null);
   const stay = useRef<string | null>(null); // schéma ouvert depuis Favoris : on reste dans Favoris
@@ -499,7 +502,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
       </span>
     ) : e.isDir ? (
       <span className="icon folder" aria-hidden>
-        <FolderIcon size={big} />
+        <FolderGlyph name={e.icon} size={big} />
       </span>
     ) : (
       <Thumb path={e.path} version={e.modTime} />
@@ -578,6 +581,12 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
         <TagIcon />
         Tags…
       </button>
+      {e.isDir && (
+        <button role="menuitem" onClick={() => setIconing([e])}>
+          <FolderGlyph name={e.icon} />
+          Icône…
+        </button>
+      )}
       {!e.isDir && (
         <a role="menuitem" href={api.downloadUrl(e.path)} download={e.name}>
           <DownloadIcon />
@@ -899,6 +908,8 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
           onClose={() => setTagging(null)}
         />
       )}
+
+      {iconing && <IconDialog items={iconing} onChanged={reload} onClose={() => setIconing(null)} />}
 
       {menu && (
         <ActionMenu anchor={menu.anchor} onClose={closeMenu}>

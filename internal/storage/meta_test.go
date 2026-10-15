@@ -71,3 +71,35 @@ func TestTagsFavorites(t *testing.T) {
 		t.Fatalf("après suppression : %+v", tags)
 	}
 }
+
+func TestFolderIcon(t *testing.T) {
+	s := newStore(t)
+	s.Write("d/a.excalidraw", []byte(doc), "", true)
+
+	if err := s.SetIcon([]string{"d"}, "server"); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []struct {
+		path, icon string
+	}{{"d", "Server"}, {"d", "../x"}, {"d/a.excalidraw", "server"}, {"absent", "server"}} {
+		if err := s.SetIcon([]string{bad.path}, bad.icon); err == nil {
+			t.Errorf("SetIcon(%q, %q) aurait dû échouer", bad.path, bad.icon)
+		}
+	}
+	if l, _ := s.List(""); len(l) != 1 || l[0].Icon != "server" {
+		t.Fatalf("List = %+v", l)
+	}
+
+	// L'icône suit le renommage et disparaît quand on rétablit le défaut.
+	s.Move("d", "e")
+	s2, _ := New(s.root)
+	if l, _ := s2.List(""); len(l) != 1 || l[0].Icon != "server" {
+		t.Fatalf("après renommage : %+v", l)
+	}
+	if err := s2.SetIcon([]string{"e"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if l, _ := s2.List(""); l[0].Icon != "" {
+		t.Fatalf("après retour au défaut : %+v", l)
+	}
+}

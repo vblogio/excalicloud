@@ -8,6 +8,8 @@ export interface Entry {
   modTime: string;
   tags?: string[];
   favorite?: boolean;
+  /** Dossier : icône choisie (voir folderIcons.tsx). */
+  icon?: string;
   /** Entrée virtuelle de la racine : "favoris" ou "perso" (espace personnel). */
   special?: "favoris" | "perso";
   /** Dans le dossier Favoris : nom du lien (le chemin est celui de l'original). */
@@ -149,6 +151,11 @@ export const api = {
 
   editTags: async (paths: string[], add: string[], remove: string[]): Promise<void> => {
     await request("/api/meta/tags", json({ paths, add, remove }));
+  },
+
+  /** icon = "" : dossier classique. */
+  setIcon: async (paths: string[], icon: string): Promise<void> => {
+    await request("/api/meta/icon", json({ paths, icon }));
   },
 
   read: async (path: string): Promise<{ text: string; etag: string }> => {

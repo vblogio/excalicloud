@@ -1,7 +1,7 @@
 // Icônes au trait, dans le style d'Excalidraw (jeu Tabler, trait fin, couleur héritée).
 import type { ReactNode } from "react";
 
-const icon = (paths: ReactNode) =>
+export const icon = (paths: ReactNode) =>
   function Icon({ size = 16 }: { size?: number }) {
     return (
       <svg
