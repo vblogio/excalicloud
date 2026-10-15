@@ -137,7 +137,7 @@ func TestWriteReadListSearch(t *testing.T) {
 	for _, e := range l["entries"].([]any) {
 		paths = append(paths, e.(map[string]any)["path"].(string))
 	}
-	if strings.Join(paths, ",") != ".favoris,.perso,réseau,réseau/app trois tiers.excalidraw" {
+	if strings.Join(paths, ",") != ".favoris,.perso,.poubelle,réseau,réseau/app trois tiers.excalidraw" {
 		t.Fatalf("liste = %v", paths)
 	}
 	s, _ := callTool(t, h, "search_diagrams", map[string]any{"query": "172.27.207"})

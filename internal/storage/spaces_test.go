@@ -77,7 +77,8 @@ func TestSpacesListAndPrivacy(t *testing.T) {
 	write(t, a, "commun.excalidraw")
 
 	l, err := a.List("")
-	if err != nil || len(l) != 3 || l[0].Special != "favoris" || l[1].Special != "perso" || l[2].Path != "commun.excalidraw" {
+	if err != nil || len(l) != 4 || l[0].Special != "favoris" || l[1].Special != "perso" || l[2].Special != "poubelle" ||
+		l[3].Path != "commun.excalidraw" {
 		t.Fatalf("racine = %+v, %v", l, err)
 	}
 	if l, _ := a.List(".perso"); len(l) != 1 || l[0].Path != ".perso/secret.excalidraw" {
@@ -242,7 +243,7 @@ func TestSpacesSharesAndCrossMove(t *testing.T) {
 	if _, err := a.Move(".perso/p.excalidraw", "q.excalidraw"); err != nil {
 		t.Fatal(err)
 	}
-	if l, _ := a.List(""); len(l) != 3 || len(l[2].Tags) != 1 {
+	if l, _ := a.List(""); len(l) != 4 || len(l[3].Tags) != 1 {
 		t.Fatalf("tags après déplacement : %+v", l)
 	}
 	if vs, err := a.Versions("q.excalidraw"); err != nil || len(vs) != 1 {

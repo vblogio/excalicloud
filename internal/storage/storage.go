@@ -56,6 +56,11 @@ type Entry struct {
 	Special string `json:"special,omitempty"` // "favoris" ou "perso" : entrée de la racine
 	Link    string `json:"link,omitempty"`    // nom du lien dans le dossier Favoris
 	Broken  bool   `json:"broken,omitempty"`  // favori dont le schéma d'origine a disparu
+
+	// Poubelle (trash.go, spaces.go).
+	Count  int    `json:"count,omitempty"`  // entrée « poubelle » de la racine : nombre d'éléments
+	Origin string `json:"origin,omitempty"` // élément de la poubelle : chemin d'origine
+	By     string `json:"by,omitempty"`     // élément de la poubelle : supprimé par
 }
 
 // Store est un dépôt de schémas enraciné dans un répertoire.
@@ -429,9 +434,15 @@ func (s *Store) Copy(from, to string) (Entry, error) {
 	return e, err
 }
 
-// Delete déplace un fichier ou un dossier dans la corbeille (.trash/), sans
-// suppression physique. Un dossier non vide n'est supprimé que si recursive.
+// Delete déplace un fichier ou un dossier dans la corbeille (.trash/, voir
+// trash.go), sans suppression physique. Un dossier non vide n'est supprimé que
+// si recursive.
 func (s *Store) Delete(rel string, recursive bool) error {
+	return s.deleteAs(rel, recursive, "")
+}
+
+// deleteAs est Delete en notant l'auteur de la suppression (by).
+func (s *Store) deleteAs(rel string, recursive bool, by string) error {
 	c, abs, err := s.resolve(rel)
 	if err != nil {
 		return err
@@ -452,16 +463,10 @@ func (s *Store) Delete(rel string, recursive bool) error {
 			return ErrNotEmpty
 		}
 	}
-	trash := filepath.Join(s.root, trashDir, time.Now().UTC().Format("20060102T150405.000000000"))
-	if err := os.MkdirAll(trash, 0o755); err != nil {
-		return err
-	}
-	if err := os.Rename(abs, filepath.Join(trash, filepath.Base(abs))); err != nil {
+	if err := s.trash(c, abs, by); err != nil {
 		return err
 	}
 	s.removeThumb(c, fi.IsDir())
-	s.trashHistory(c, trash)
-	s.removeMeta(c)
 	s.removeShares(c)
 	return nil
 }

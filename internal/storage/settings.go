@@ -18,8 +18,8 @@ import (
 	"github.com/vblogio/excalidraw-go/internal/update"
 )
 
-// Paramètres de l'interface (titre, logo, canal d'Excalidraw), partagés par
-// tous les navigateurs : .settings.json et .logo.png à la racine.
+// Paramètres de l'interface (titre, logo, canal d'Excalidraw) et rétention de
+// la corbeille, partagés par tous les navigateurs : .settings.json et .logo.png à la racine.
 
 const (
 	settingsFile = ".settings.json"
@@ -31,6 +31,8 @@ const (
 	MaxLogoUpload = 5 << 20
 	// MaxTitleLen borne la longueur du titre (en caractères).
 	MaxTitleLen = 80
+	// MaxTrashDays borne la durée de conservation de la corbeille (en jours).
+	MaxTrashDays = 3650
 
 	maxLogoSide = 8192 // protège contre les « bombes » de décompression
 )
@@ -44,16 +46,19 @@ const DefaultChannel = "latest"
 // Settings est l'état exposé au client. Logo vaut "" sans logo, sinon une
 // version (date) à ajouter à l'URL pour invalider le cache navigateur.
 // Channel est le canal npm d'Excalidraw (latest ou next) dont l'interface
-// signale les nouvelles versions.
+// signale les nouvelles versions. TrashDays est la durée de conservation des
+// éléments de la corbeille (0 : jusqu'à ce qu'on la vide).
 type Settings struct {
-	Title   string `json:"title"`
-	Logo    string `json:"logo"`
-	Channel string `json:"channel"`
+	Title     string `json:"title"`
+	Logo      string `json:"logo"`
+	Channel   string `json:"channel"`
+	TrashDays int    `json:"trashDays"`
 }
 
 type settingsDisk struct {
-	Title   string `json:"title"`
-	Channel string `json:"channel,omitempty"`
+	Title     string `json:"title"`
+	Channel   string `json:"channel,omitempty"`
+	TrashDays int    `json:"trashDays,omitempty"`
 }
 
 func (s *Store) readSettingsDisk() (settingsDisk, error) {
@@ -97,7 +102,7 @@ func (s *Store) ReadSettings() (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
-	st := Settings{Title: d.Title, Channel: d.Channel}
+	st := Settings{Title: d.Title, Channel: d.Channel, TrashDays: d.TrashDays}
 	if !update.ValidChannel(st.Channel) {
 		st.Channel = DefaultChannel
 	}
@@ -113,6 +118,14 @@ func (s *Store) WriteChannel(channel string) (Settings, error) {
 		return Settings{}, fmt.Errorf("%w : canal %q (latest ou next)", ErrInvalidPath, channel)
 	}
 	return s.updateSettings(func(d *settingsDisk) { d.Channel = channel })
+}
+
+// WriteTrashDays règle la purge automatique de la corbeille (0 : désactivée).
+func (s *Store) WriteTrashDays(days int) (Settings, error) {
+	if days < 0 || days > MaxTrashDays {
+		return Settings{}, fmt.Errorf("%w : durée de 0 à %d jours", ErrInvalidPath, MaxTrashDays)
+	}
+	return s.updateSettings(func(d *settingsDisk) { d.TrashDays = days })
 }
 
 // WriteTitle enregistre le titre affiché ("" = titre par défaut).

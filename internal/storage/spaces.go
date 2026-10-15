@@ -22,16 +22,20 @@ import (
 //	DATA_DIR/.users/<id>/favoris  liens symboliques relatifs vers des schémas
 //
 // Côté API, l'arborescence commune garde ses chemins. L'espace personnel est
-// exposé sous le préfixe virtuel ".perso" et les favoris sous ".favoris" : un
-// préfixe caché ne peut pas entrer en conflit avec un dossier réel. Un favori
-// pointe vers le schéma d'origine ; il suit ses renommages et déplacements et
-// disparaît quand le schéma est supprimé.
+// exposé sous le préfixe virtuel ".perso", les favoris sous ".favoris" et la
+// poubelle sous ".poubelle" : un préfixe caché ne peut pas entrer en conflit
+// avec un dossier réel. Un favori pointe vers le schéma d'origine ; il suit ses
+// renommages et déplacements et disparaît quand le schéma est supprimé. La
+// poubelle réunit les corbeilles de l'arborescence commune (".poubelle/c-<id>",
+// visibles de tous) et de l'espace personnel (".poubelle/p-<id>").
 
 const (
 	// PersoPrefix est la racine virtuelle de l'espace personnel.
 	PersoPrefix = ".perso"
 	// FavPrefix est le dossier virtuel des favoris.
 	FavPrefix = ".favoris"
+	// TrashPrefix est le dossier virtuel de la poubelle.
+	TrashPrefix = ".poubelle"
 
 	usersDir   = ".users"
 	homeName   = "home"
@@ -76,6 +80,9 @@ type Spaces struct {
 	homes map[string]*Store
 
 	favMu sync.Mutex // dossiers de favoris (tous utilisateurs)
+
+	purgeMu   sync.Mutex
+	lastPurge time.Time // dernière purge automatique de la corbeille
 }
 
 // NewSpaces crée le gestionnaire d'espaces autour du Store principal.
@@ -309,6 +316,8 @@ func (u *Space) route(p string) (*Store, string, error) {
 		return u.home, c[len(PersoPrefix)+1:], nil
 	case c == FavPrefix || strings.HasPrefix(c, FavPrefix+"/"):
 		return nil, "", fmt.Errorf("%w : le dossier Favoris ne contient que des liens", ErrInvalidPath)
+	case c == TrashPrefix || strings.HasPrefix(c, TrashPrefix+"/"):
+		return nil, "", fmt.Errorf("%w : élément de la poubelle (à restaurer d'abord)", ErrInvalidPath)
 	}
 	return u.sp.Main, p, nil
 }
@@ -446,10 +455,14 @@ func isRoot(rel string) bool {
 }
 
 // List renvoie le contenu d'un dossier. La racine commune commence par les
-// dossiers virtuels Favoris et Personnel.
+// dossiers virtuels Favoris, Personnel et Poubelle.
 func (u *Space) List(p string) ([]Entry, error) {
-	if cleanVirtual(p) == FavPrefix {
+	u.sp.autoPurge()
+	switch cleanVirtual(p) {
+	case FavPrefix:
 		return u.Favorites()
+	case TrashPrefix:
+		return u.Trash()
 	}
 	st, rel, err := u.route(p)
 	if err != nil {
@@ -464,7 +477,9 @@ func (u *Space) List(p string) ([]Entry, error) {
 	if st == u.sp.Main && isRoot(rel) {
 		out = append(out,
 			Entry{Name: "Favoris", Path: FavPrefix, IsDir: true, Special: "favoris"},
-			Entry{Name: "Personnel", Path: PersoPrefix, IsDir: true, Special: "perso"})
+			Entry{Name: "Personnel", Path: PersoPrefix, IsDir: true, Special: "perso"},
+			Entry{Name: "Poubelle", Path: TrashPrefix, IsDir: true, Special: "poubelle",
+				Count: u.sp.Main.TrashCount() + u.home.TrashCount()})
 	}
 	for _, e := range es {
 		out = append(out, u.entry(st, e, favs))
@@ -747,10 +762,17 @@ func (u *Space) Copy(from, to string) (Entry, error) {
 }
 
 // Delete met un élément à la corbeille de son espace ; les favoris qui le
-// visent disparaissent. Sur .favoris/<lien>, seul le lien est retiré.
+// visent disparaissent. Sur .favoris/<lien>, seul le lien est retiré. Dans la
+// poubelle, l'élément est supprimé définitivement (.poubelle seul : la vide).
 func (u *Space) Delete(p string, recursive bool) error {
 	if _, ok := favLinkName(p); ok {
 		return u.SetFavorite([]string{p}, false)
+	}
+	if cleanVirtual(p) == TrashPrefix {
+		return u.EmptyTrash()
+	}
+	if st, id, ok := u.trashItem(p); ok {
+		return st.DropTrash(id)
 	}
 	st, rel, err := u.route(p)
 	if err != nil {
@@ -760,7 +782,7 @@ func (u *Space) Delete(p string, recursive bool) error {
 	if err != nil {
 		return err
 	}
-	if err := st.Delete(rel, recursive); err != nil {
+	if err := st.deleteAs(rel, recursive, u.id); err != nil {
 		return err
 	}
 	u.sp.unlink(abs)
@@ -941,4 +963,109 @@ func (s *Store) putShares(c string, add map[string]shareDisk) {
 		}
 		return true, nil
 	})
+}
+
+// --- Poubelle ---------------------------------------------------------------------
+
+// trashItem traduit .poubelle/c-<id> ou .poubelle/p-<id> en Store et identifiant.
+func (u *Space) trashItem(p string) (*Store, string, bool) {
+	key, ok := strings.CutPrefix(cleanVirtual(p), TrashPrefix+"/")
+	if !ok {
+		return nil, "", false
+	}
+	switch {
+	case strings.HasPrefix(key, "c-"):
+		return u.sp.Main, key[2:], true
+	case strings.HasPrefix(key, "p-"):
+		return u.home, key[2:], true
+	}
+	return nil, "", false
+}
+
+// Trash liste la poubelle : suppressions de l'arborescence commune et de
+// l'espace personnel, les plus récentes en premier. ModTime est la date de
+// suppression, Origin le chemin d'origine.
+func (u *Space) Trash() ([]Entry, error) {
+	out := []Entry{}
+	for _, st := range []*Store{u.sp.Main, u.home} {
+		items, err := st.TrashItems()
+		if err != nil {
+			return nil, err
+		}
+		prefix := "c-"
+		if st == u.home {
+			prefix = "p-"
+		}
+		for _, it := range items {
+			out = append(out, Entry{
+				Name:    it.Name,
+				Path:    TrashPrefix + "/" + prefix + it.ID,
+				IsDir:   it.IsDir,
+				Size:    it.Size,
+				ModTime: it.Deleted,
+				Origin:  u.virt(st, it.Path),
+				By:      it.By,
+			})
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].ModTime.After(out[j].ModTime) })
+	return out, nil
+}
+
+// RestoreTrash remet des éléments de la poubelle à leur emplacement d'origine ;
+// To est le chemin restauré (renommé si la place était prise).
+func (u *Space) RestoreTrash(paths []string) []MoveResult {
+	out := make([]MoveResult, 0, len(paths))
+	for _, p := range paths {
+		r := MoveResult{From: p}
+		st, id, ok := u.trashItem(p)
+		if !ok {
+			r.Error = ErrInvalidPath.Error()
+		} else if e, err := st.RestoreTrash(id); err != nil {
+			r.Error = err.Error()
+		} else {
+			r.To = u.virt(st, e.Path)
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// EmptyTrash vide la poubelle (corbeille commune comprise).
+func (u *Space) EmptyTrash() error {
+	return errors.Join(u.sp.Main.EmptyTrash(), u.home.EmptyTrash())
+}
+
+// purgeEvery espace les purges automatiques déclenchées par List.
+const purgeEvery = 10 * time.Minute
+
+func (sp *Spaces) autoPurge() {
+	sp.purgeMu.Lock()
+	due := time.Since(sp.lastPurge) >= purgeEvery
+	if due {
+		sp.lastPurge = time.Now()
+	}
+	sp.purgeMu.Unlock()
+	if due {
+		_ = sp.PurgeTrash()
+	}
+}
+
+// PurgeTrash supprime définitivement, dans toutes les corbeilles, les éléments
+// plus anciens que Settings.TrashDays (rien si 0).
+func (sp *Spaces) PurgeTrash() error {
+	st, err := sp.Main.ReadSettings()
+	if err != nil || st.TrashDays <= 0 {
+		return err
+	}
+	maxAge := time.Duration(st.TrashDays) * 24 * time.Hour
+	errs := []error{sp.Main.PurgeTrashOlder(maxAge)}
+	for _, id := range sp.users() {
+		h, err := sp.home(id)
+		if err == nil {
+			err = h.PurgeTrashOlder(maxAge)
+		}
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
 }

@@ -12,7 +12,9 @@
 //	POST   /api/move     {"from":"x","to":"y"}    renommage / déplacement
 //	POST   /api/move-many {"paths":[...],"dir":"d"} déplacement multiple
 //	POST   /api/copy     {"from":"x","to":"y"}    duplication d'un schéma
-//	DELETE /api/entry?path=x[&recursive=true]     mise à la corbeille
+//	DELETE /api/entry?path=x[&recursive=true]     mise à la poubelle (suppression définitive
+//	                                              dans .poubelle ; path=.poubelle : la vide)
+//	POST   /api/trash/restore {"paths":[...]}     restauration depuis la poubelle
 //	GET    /api/thumb?path=x  /  PUT (image/png)   miniature d'un schéma
 //	GET    /api/history?path=x                   versions d'un schéma
 //	GET    /api/history/version?path=x&id=v      contenu d'une version
@@ -24,13 +26,15 @@
 //	POST   /api/shares/revoke-all                révocation de tous les liens
 //	GET    /api/public/{jeton}                   schéma partagé (sans authentification)
 //	GET    /api/library  /  PUT /api/library      bibliothèque Excalidraw
-//	GET    /api/settings / PUT {"title","channel"} paramètres (titre, logo, canal)
+//	GET    /api/settings / PUT {"title","channel","trashDays"} paramètres (titre, logo, canal,
+//	                                              purge de la poubelle après N jours, 0 : jamais)
 //	GET    /api/logo  /  PUT (image/png)  /  DELETE   logo 64x64
 //	GET    /api/update                    dernière version d'Excalidraw sur npm
 //
 // Les chemins sont vus par l'utilisateur connecté (storage.Space) : l'arborescence
-// commune, plus ".perso/..." (son espace personnel) et ".favoris" (ses favoris,
-// liens symboliques vers les originaux ; DELETE .favoris/x retire le lien).
+// commune, plus ".perso/..." (son espace personnel), ".favoris" (ses favoris,
+// liens symboliques vers les originaux ; DELETE .favoris/x retire le lien) et
+// ".poubelle" (éléments supprimés, de l'arborescence commune et de son espace).
 package api
 
 import (
@@ -87,6 +91,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/move-many", h.moveMany)
 	mux.HandleFunc("POST /api/copy", h.copy)
 	mux.HandleFunc("DELETE /api/entry", h.delete)
+	mux.HandleFunc("POST /api/trash/restore", h.restoreTrash)
 	mux.HandleFunc("GET /api/thumb", h.readThumb)
 	mux.HandleFunc("PUT /api/thumb", h.writeThumb)
 	mux.HandleFunc("GET /api/history", h.history)
@@ -381,6 +386,18 @@ func (h *Handler) moveMany(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
+func (h *Handler) restoreTrash(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.space(w, r)
+	if !ok {
+		return
+	}
+	req, ok := h.decodeMeta(w, r)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, u.RestoreTrash(req.Paths))
+}
+
 func (h *Handler) readThumb(w http.ResponseWriter, r *http.Request) {
 	u, ok := h.space(w, r)
 	if !ok {
@@ -648,8 +665,9 @@ func (h *Handler) readSettings(w http.ResponseWriter, r *http.Request) {
 
 // settingsReq : seuls les champs présents sont modifiés.
 type settingsReq struct {
-	Title   *string `json:"title"`
-	Channel *string `json:"channel"`
+	Title     *string `json:"title"`
+	Channel   *string `json:"channel"`
+	TrashDays *int    `json:"trashDays"`
 }
 
 func (h *Handler) writeSettings(w http.ResponseWriter, r *http.Request) {
@@ -663,6 +681,13 @@ func (h *Handler) writeSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if err == nil && req.Channel != nil {
 		st, err = h.Store.WriteChannel(*req.Channel)
+	}
+	if err == nil && req.TrashDays != nil {
+		if st, err = h.Store.WriteTrashDays(*req.TrashDays); err == nil {
+			if perr := h.Spaces.PurgeTrash(); perr != nil {
+				slog.Warn("poubelle : purge incomplète", "err", perr)
+			}
+		}
 	}
 	if err != nil {
 		fail(w, err)
