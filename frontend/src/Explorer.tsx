@@ -8,8 +8,10 @@ import {
   displayPath,
   EXT,
   inFavoris,
+  inPoubelle,
   join,
   label,
+  POUBELLE,
   stripExt,
   withExt,
   type Entry,
@@ -23,6 +25,7 @@ import {
   DotsIcon,
   DownloadIcon,
   EditIcon,
+  FileIcon,
   FilePlusIcon,
   FolderIcon,
   FolderPlusIcon,
@@ -32,12 +35,14 @@ import {
   ListIcon,
   MoveIcon,
   RefreshIcon,
+  RestoreIcon,
   SearchIcon,
   SelectAllIcon,
   ShareIcon,
   StarFilledIcon,
   StarIcon,
   TagIcon,
+  TrashFullIcon,
   TrashIcon,
   UpIcon,
   UploadIcon,
@@ -121,6 +126,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [tagging, setTagging] = useState<Entry[] | null>(null); // éléments du dialogue « Tags »
   const [iconing, setIconing] = useState<Entry[] | null>(null); // dossiers du dialogue « Icône »
+  const [trashDays, setTrashDays] = useState<number | null>(null); // purge automatique (0 : jamais)
   const fileInput = useRef<HTMLInputElement>(null);
   const dirInput = useRef<HTMLInputElement>(null);
   const stay = useRef<string | null>(null); // schéma ouvert depuis Favoris : on reste dans Favoris
@@ -130,6 +136,9 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   const filtering = query.trim() !== "" || tagFilter !== null;
   // Dossier Favoris : des liens vers les originaux, ni création ni déplacement.
   const favView = !results && inFavoris(dir);
+  // Poubelle : éléments à restaurer ou à supprimer définitivement, rien d'autre.
+  const trashView = !results && inPoubelle(dir);
+  const locked = favView || trashView; // ni création, ni import, ni déplacement
 
   const closeMenu = useCallback(() => setMenu(null), []);
   // La liste change de forme : le bouton « … » d'origine disparaît.
@@ -196,6 +205,15 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
     if (filtering) setResults(await api.search(query, filter));
   };
 
+  // Délai de purge, affiché dans la poubelle (réglé dans les paramètres).
+  useEffect(() => {
+    if (!trashView) return;
+    api
+      .settings()
+      .then((s) => setTrashDays(s.trashDays))
+      .catch(() => setTrashDays(null));
+  }, [trashView, refreshKey]);
+
   useEffect(() => {
     try {
       localStorage.setItem("explorerView", view);
@@ -235,6 +253,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   const onItemClick = (ev: MouseEvent, e: Entry) => {
     if (!e.special) {
       if (ev.shiftKey) return selectRange(e.path);
+      if (trashView) return toggle(e.path); // un élément de la poubelle ne s'ouvre pas
       // Ctrl/Cmd+clic, ou clic quand une sélection est en cours (mode sélection tactile).
       if (ev.ctrlKey || ev.metaKey || selected.size > 0) return toggle(e.path);
     }
@@ -362,12 +381,48 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
           ? `${plural(paths.length, "élément")} (dossiers compris avec leur contenu)`
           : one?.isDir
             ? `le dossier « ${one.name} » et tout son contenu`
-            : `« ${basename(paths[0])} »`;
-      if (!confirm(`Mettre ${what} à la corbeille ?`)) return;
+            : `« ${stripExt(one?.name ?? basename(paths[0]))} »`;
+      if (trashView) {
+        if (!confirm(`Supprimer définitivement ${what} ? Cette action est irréversible.`)) return;
+        for (const p of paths) await api.remove(p, true);
+        clearSelection();
+        return reload();
+      }
+      if (!confirm(`Mettre ${what} à la poubelle ?`)) return;
       for (const p of paths) {
         await api.remove(p, true);
         onDeleted(p);
       }
+      clearSelection();
+      await reload();
+    });
+
+  /** Remet des éléments de la poubelle à leur emplacement d'origine. */
+  const restoreMany = (paths: string[]) =>
+    guard(async () => {
+      const res = await api.restoreTrash(paths);
+      const failed = res.filter((r) => r.error);
+      const done = res.filter((r) => r.to);
+      clearSelection();
+      await reload();
+      if (done.length) {
+        setNotice({
+          text: `${plural(done.length, "élément")} restauré${done.length > 1 ? "s" : ""}`,
+          detail: done.map((r) => displayPath(r.to!)).join("\n"),
+        });
+      }
+      if (failed.length) {
+        const name = (p: string) => stripExt(list.find((e) => e.path === p)?.name ?? basename(p));
+        setError(
+          `${plural(failed.length, "élément")} non restauré${failed.length > 1 ? "s" : ""} — ${failed.map((r) => `${name(r.from)} : ${r.error}`).join(" ; ")}`,
+        );
+      }
+    });
+
+  const emptyTrash = () =>
+    guard(async () => {
+      if (!confirm(`Vider la poubelle (${plural(list.length, "élément")}) ? Cette action est irréversible.`)) return;
+      await api.remove(POUBELLE, true);
       clearSelection();
       await reload();
     });
@@ -442,7 +497,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
     onDragOver: (ev: DragEvent) => {
       const external = hasFiles(ev.dataTransfer);
       if (!external && !ev.dataTransfer.types.includes(DND_TYPE)) return;
-      if (external && inFavoris(targetDir)) return; // pas d'import dans Favoris
+      if (external && (inFavoris(targetDir) || inPoubelle(targetDir))) return; // pas d'import dans Favoris ni la poubelle
       ev.preventDefault();
       ev.dataTransfer.dropEffect = external ? "copy" : inFavoris(targetDir) ? "link" : "move";
       setDropTarget(targetDir);
@@ -461,6 +516,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
         return;
       }
       if (inFavoris(targetDir)) addFavorites(paths);
+      else if (inPoubelle(targetDir)) removeMany(paths);
       else moveMany(paths, targetDir);
     },
   });
@@ -468,13 +524,15 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   // --- Rendu ---------------------------------------------------------------
 
   const crumbs = dir ? dir.split("/") : [];
-  const importDir = results || favView ? "" : dir; // pendant une recherche, le dossier courant n'est pas affiché
+  const importDir = results || locked ? "" : dir; // pendant une recherche, le dossier courant n'est pas affiché
   const where = (p: string) => displayPath(dirname(p)) || "Racine";
+  const deletedInfo = (e: Entry) =>
+    `Supprimé le ${fmtDate(e.modTime)}${e.by ? ` par ${e.by}` : ""}\nEmplacement d'origine : ${e.origin ? where(e.origin) : "inconnu"}`;
 
   // Dépôt n'importe où dans l'explorateur : import dans le dossier courant.
   const zoneProps = {
     onDragOver: (ev: DragEvent) => {
-      if (favView || !hasFiles(ev.dataTransfer)) return;
+      if (locked || !hasFiles(ev.dataTransfer)) return;
       ev.preventDefault();
       ev.dataTransfer.dropEffect = "copy";
       setFileDrag(true);
@@ -483,7 +541,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
       if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) setFileDrag(false);
     },
     onDrop: (ev: DragEvent) => {
-      if (favView || !hasFiles(ev.dataTransfer)) return;
+      if (locked || !hasFiles(ev.dataTransfer)) return;
       ev.preventDefault();
       setFileDrag(false);
       importTree(collectDrop(ev.dataTransfer), importDir);
@@ -493,8 +551,22 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   const big = view === "grid" ? 40 : 20;
   const icon = (e: Entry) =>
     e.special ? (
-      <span className={`icon special ${e.special}`} aria-hidden>
-        {e.special === "favoris" ? <StarFilledIcon size={big} /> : <UserIcon size={big} />}
+      <span className={`icon special ${e.special} ${e.count ? "full" : ""}`} aria-hidden>
+        {e.special === "favoris" ? (
+          <StarFilledIcon size={big} />
+        ) : e.special === "poubelle" ? (
+          e.count ? (
+            <TrashFullIcon size={big} />
+          ) : (
+            <TrashIcon size={big} />
+          )
+        ) : (
+          <UserIcon size={big} />
+        )}
+      </span>
+    ) : trashView ? (
+      <span className="icon" aria-hidden>
+        {e.isDir ? <FolderIcon size={big} /> : <FileIcon size={big} />}
       </span>
     ) : e.broken ? (
       <span className="icon folder" aria-hidden>
@@ -540,6 +612,22 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
         <StarIcon />
         Retirer des favoris
       </button>
+    </>
+  );
+
+  // Dans la poubelle : restauration ou suppression définitive.
+  const trashActions = (e: Entry) => (
+    <>
+      <button role="menuitem" onClick={() => restoreMany([e.path])}>
+        <RestoreIcon />
+        Restaurer
+      </button>
+      <hr />
+      <button role="menuitem" className="danger" onClick={() => removeMany([e.path])}>
+        <TrashIcon />
+        Supprimer définitivement
+      </button>
+      <span className="muted size deleted">{deletedInfo(e)}</span>
     </>
   );
 
@@ -617,7 +705,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
       <li key={e.path} className={cls}>
         <div
           className="row"
-          draggable={!e.special && !favView}
+          draggable={!e.special && !locked}
           onDragStart={(ev) => onDragStart(ev, e)}
           {...(e.isDir ? dropProps(e.path) : {})}
         >
@@ -640,7 +728,17 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
           <button
             className="name"
             onClick={(ev) => onItemClick(ev, e)}
-            title={e.broken ? "Original introuvable : retirer ce favori" : displayPath(e.path)}
+            title={
+              e.broken
+                ? "Original introuvable : retirer ce favori"
+                : trashView
+                  ? deletedInfo(e)
+                  : e.special === "poubelle"
+                    ? e.count
+                      ? `Poubelle : ${plural(e.count, "élément")}`
+                      : "Poubelle vide"
+                    : displayPath(e.path)
+            }
           >
             {icon(e)}
             <span className="label">
@@ -650,7 +748,9 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
                 </span>
               )}
               {e.isDir ? e.name : stripExt(e.name)}
+              {e.special === "poubelle" && !!e.count && <small className="badge">{e.count}</small>}
               {(results || (favView && !e.broken)) && <small className="muted where"> {where(e.path)}</small>}
+              {trashView && <small className="muted where"> {e.origin ? where(e.origin) : ""}</small>}
               {e.snippet && <small className="snippet">{e.snippet}</small>}
             </span>
           </button>
@@ -668,7 +768,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
               ))}
             </span>
           )}
-          {!e.isDir && view === "list" && <span className="meta muted">{fmtDate(e.modTime)}</span>}
+          {(!e.isDir || trashView) && view === "list" && <span className="meta muted">{fmtDate(e.modTime)}</span>}
           {!e.special && (
           <button
             className={`icon-btn more ${menu?.entry.path === e.path ? "open" : ""}`}
@@ -692,18 +792,18 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   return (
     <div className={`explorer ${fileDrag ? "file-drag" : ""}`} onKeyDown={onKeyDown} {...zoneProps}>
       <div className="toolbar">
-        <button className="ex-btn" onClick={newDrawing} title="Nouveau schéma" disabled={favView}>
+        <button className="ex-btn" onClick={newDrawing} title="Nouveau schéma" disabled={locked}>
           <FilePlusIcon />
           <span>Schéma</span>
         </button>
-        <button className="ex-btn" onClick={newFolder} title="Nouveau dossier" disabled={favView}>
+        <button className="ex-btn" onClick={newFolder} title="Nouveau dossier" disabled={locked}>
           <FolderPlusIcon />
           <span>Dossier</span>
         </button>
         <button
           className="ex-btn"
           onClick={() => fileInput.current?.click()}
-          disabled={favView}
+          disabled={locked}
           title="Importer des fichiers .excalidraw (ou glisser-déposer fichiers et dossiers ici)"
         >
           <UploadIcon />
@@ -712,7 +812,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
         <button
           className="ex-btn square"
           onClick={() => dirInput.current?.click()}
-          disabled={favView}
+          disabled={locked}
           title="Importer un dossier complet (arborescence recréée, seuls les .excalidraw sont importés)"
           aria-label="Importer un dossier"
         >
@@ -812,6 +912,22 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
         </nav>
       )}
 
+      {trashView && (
+        <div className="trashbar">
+          <small className="muted">
+            {trashDays === null
+              ? ""
+              : trashDays === 0
+                ? "Conservés jusqu'à suppression définitive"
+                : `Supprimés définitivement après ${plural(trashDays, "jour")}`}
+          </small>
+          <button className="ex-btn danger" onClick={emptyTrash} disabled={list.length === 0}>
+            <TrashIcon />
+            <span>Vider la poubelle</span>
+          </button>
+        </div>
+      )}
+
       {selected.size > 0 && (
         <div className="selbar">
           <button className="icon-btn" onClick={clearSelection} aria-label="Annuler la sélection" title="Annuler la sélection (Échap)">
@@ -826,23 +942,33 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
           >
             {selected.size === selectable.length ? <DeselectIcon /> : <SelectAllIcon />}
           </button>
-          <button
-            className="icon-btn"
-            onClick={() => toggleFavorite(list.filter((e) => selected.has(e.path)))}
-            title={favView ? "Retirer des favoris" : "Favoris (ajouter ou retirer)"}
-            aria-label="Favoris"
-          >
-            <StarIcon />
-          </button>
-          <button
-            className="icon-btn"
-            onClick={() => setTagging(list.filter((e) => selected.has(e.path)))}
-            title="Tags…"
-            aria-label="Tags"
-          >
-            <TagIcon />
-          </button>
-          {!favView && (
+          {trashView && (
+            <button className="ex-btn" onClick={() => restoreMany([...selected])}>
+              <RestoreIcon />
+              <span>Restaurer</span>
+            </button>
+          )}
+          {!trashView && (
+            <button
+              className="icon-btn"
+              onClick={() => toggleFavorite(list.filter((e) => selected.has(e.path)))}
+              title={favView ? "Retirer des favoris" : "Favoris (ajouter ou retirer)"}
+              aria-label="Favoris"
+            >
+              <StarIcon />
+            </button>
+          )}
+          {!trashView && (
+            <button
+              className="icon-btn"
+              onClick={() => setTagging(list.filter((e) => selected.has(e.path)))}
+              title="Tags…"
+              aria-label="Tags"
+            >
+              <TagIcon />
+            </button>
+          )}
+          {!locked && (
             <button className="ex-btn" onClick={() => setMoving([...selected])}>
               <MoveIcon />
               <span>Déplacer…</span>
@@ -851,8 +977,10 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
           <button
             className="icon-btn danger"
             onClick={() => removeMany([...selected])}
-            title={favView ? "Retirer des favoris (Suppr)" : "Mettre à la corbeille (Suppr)"}
-            aria-label={favView ? "Retirer des favoris" : "Supprimer"}
+            title={
+              favView ? "Retirer des favoris (Suppr)" : trashView ? "Supprimer définitivement (Suppr)" : "Mettre à la poubelle (Suppr)"
+            }
+            aria-label={favView ? "Retirer des favoris" : trashView ? "Supprimer définitivement" : "Supprimer"}
           >
             <TrashIcon />
           </button>
@@ -887,7 +1015,13 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
         {list.map(item)}
         {list.length === 0 && (
           <li className="muted empty">
-            {results ? "Aucun résultat" : favView ? "Aucun favori : étoile ou glisser-déposer un schéma ici" : "Dossier vide"}
+            {results
+              ? "Aucun résultat"
+              : favView
+                ? "Aucun favori : étoile ou glisser-déposer un schéma ici"
+                : trashView
+                  ? "La poubelle est vide"
+                  : "Dossier vide"}
           </li>
         )}
       </ul>
@@ -913,7 +1047,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
 
       {menu && (
         <ActionMenu anchor={menu.anchor} onClose={closeMenu}>
-          {favView ? favActions(menu.entry) : actions(menu.entry)}
+          {favView ? favActions(menu.entry) : trashView ? trashActions(menu.entry) : actions(menu.entry)}
         </ActionMenu>
       )}
 

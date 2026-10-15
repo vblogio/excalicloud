@@ -26,6 +26,14 @@ const CHANNELS: { id: Channel; label: string; hint: string }[] = [
   },
 ];
 
+/** Délais de purge de la poubelle (0 : jamais). */
+const TRASH_DAYS = [
+  { days: 0, label: "Jamais" },
+  { days: 1, label: "1 jour" },
+  { days: 7, label: "7 jours" },
+  { days: 30, label: "30 jours" },
+];
+
 /** Paramètres partagés par tous les utilisateurs : titre, logo, version d'Excalidraw. */
 export function SettingsDialog({ settings, update, focusExcalidraw, onChange, onClose }: Props) {
   const [title, setTitle] = useState(settings.title);
@@ -212,6 +220,31 @@ export function SettingsDialog({ settings, update, focusExcalidraw, onChange, on
               </small>
             </>
           )}
+        </section>
+
+        <section className="field">
+          <h4>Poubelle</h4>
+          <span>Suppression définitive automatique</span>
+          <div className="radio-group" role="radiogroup" aria-label="Purge de la poubelle">
+            {TRASH_DAYS.map((d) => (
+              <button
+                key={d.days}
+                type="button"
+                role="radio"
+                aria-checked={settings.trashDays === d.days}
+                className={settings.trashDays === d.days ? "on" : ""}
+                disabled={busy}
+                onClick={() => settings.trashDays !== d.days && run(() => api.setTrashDays(d.days))}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+          <small className="muted">
+            {settings.trashDays
+              ? `Les éléments mis à la poubelle sont supprimés définitivement ${settings.trashDays} jour${settings.trashDays > 1 ? "s" : ""} après leur suppression.`
+              : "La poubelle garde tout jusqu'à ce qu'on la vide ; son icône indique si elle contient des éléments."}
+          </small>
         </section>
 
         <section className="field">

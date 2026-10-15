@@ -10,8 +10,14 @@ export interface Entry {
   favorite?: boolean;
   /** Dossier : icône choisie (voir folderIcons.tsx). */
   icon?: string;
-  /** Entrée virtuelle de la racine : "favoris" ou "perso" (espace personnel). */
-  special?: "favoris" | "perso";
+  /** Entrée virtuelle de la racine : "favoris", "perso" (espace personnel) ou "poubelle". */
+  special?: "favoris" | "perso" | "poubelle";
+  /** Entrée « poubelle » de la racine : nombre d'éléments qu'elle contient. */
+  count?: number;
+  /** Élément de la poubelle : chemin d'origine (modTime = date de suppression). */
+  origin?: string;
+  /** Élément de la poubelle : supprimé par (vide si inconnu). */
+  by?: string;
   /** Dans le dossier Favoris : nom du lien (le chemin est celui de l'original). */
   link?: string;
   /** Favori dont l'original a disparu (chemin .favoris/<lien>, à retirer). */
@@ -43,11 +49,12 @@ export interface MoveResult {
 /** Canal npm d'Excalidraw : latest (stable) ou next (préversion). */
 export type Channel = "latest" | "next";
 
-/** Paramètres partagés ; logo = "" sans logo, sinon sa version. */
+/** Paramètres partagés ; logo = "" sans logo, sinon sa version ; trashDays = 0 : poubelle jamais purgée. */
 export interface Settings {
   title: string;
   logo: string;
   channel: Channel;
+  trashDays: number;
 }
 
 /** Versions d'Excalidraw publiées sur npm par canal (vide si inconnu ou désactivé). */
@@ -184,9 +191,14 @@ export const api = {
   copy: async (from: string, to: string): Promise<Entry> =>
     (await request("/api/copy", json({ from, to }))).json(),
 
+  /** Met à la poubelle ; dans .poubelle, supprime définitivement (path = .poubelle : la vide). */
   remove: async (path: string, recursive: boolean): Promise<void> => {
     await request(`/api/entry?path=${q(path)}&recursive=${recursive}`, { method: "DELETE" });
   },
+
+  /** Remet des éléments de la poubelle à leur emplacement d'origine (to : chemin restauré). */
+  restoreTrash: async (paths: string[]): Promise<MoveResult[]> =>
+    (await request("/api/trash/restore", json({ paths }))).json(),
 
   history: async (path: string): Promise<Version[]> =>
     (await request(`/api/history?path=${q(path)}`)).json(),
@@ -253,6 +265,10 @@ export const api = {
   setChannel: async (channel: Channel): Promise<Settings> =>
     (await request("/api/settings", { ...json({ channel }), method: "PUT" })).json(),
 
+  /** days = 0 : la poubelle n'est jamais purgée. */
+  setTrashDays: async (trashDays: number): Promise<Settings> =>
+    (await request("/api/settings", { ...json({ trashDays }), method: "PUT" })).json(),
+
   /** Le serveur recadre au centre et ramène le PNG à 64x64. */
   uploadLogo: async (png: Blob): Promise<Settings> =>
     (
@@ -285,12 +301,14 @@ export const join = (dir: string, name: string) => (dir ? `${dir}/${name}` : nam
 // Dossiers propres à l'utilisateur connecté (voir internal/storage/spaces.go).
 export const PERSO = ".perso";
 export const FAVORIS = ".favoris";
-const SPECIAL_LABELS: Record<string, string> = { [PERSO]: "Personnel", [FAVORIS]: "Favoris" };
+export const POUBELLE = ".poubelle";
+const SPECIAL_LABELS: Record<string, string> = { [PERSO]: "Personnel", [FAVORIS]: "Favoris", [POUBELLE]: "Poubelle" };
 /** Libellé d'un composant de chemin (".perso" → "Personnel"). */
 export const label = (part: string) => SPECIAL_LABELS[part] ?? part;
 /** Chemin affiché : "Personnel/projets" pour ".perso/projets". */
 export const displayPath = (p: string) => p.split("/").map(label).join("/");
 export const inFavoris = (p: string) => p === FAVORIS || p.startsWith(FAVORIS + "/");
+export const inPoubelle = (p: string) => p === POUBELLE || p.startsWith(POUBELLE + "/");
 export const EXT = ".excalidraw";
 export const withExt = (name: string) => (name.toLowerCase().endsWith(EXT) ? name : name + EXT);
 export const stripExt = (name: string) =>

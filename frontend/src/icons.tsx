@@ -112,6 +112,24 @@ export const TrashIcon = icon(
   <path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" />,
 );
 
+/** Poubelle qui contient des éléments : une feuille et une boule de papier dépassent du bord. */
+export const TrashFullIcon = icon(
+  <>
+    <path d="M4 10h16M5 10l1 9a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-9M10 14v3M14 14v3" />
+    <path d="M7.5 10 9 3.5l4.5 1-1.2 5.5M10.2 6.5l2 .5" />
+    <circle cx="16" cy="7.8" r="2.2" />
+  </>,
+);
+
+export const RestoreIcon = icon(<path d="M9 14l-4-4 4-4M5 10h11a4 4 0 1 1 0 8h-1" />);
+
+export const FileIcon = icon(
+  <>
+    <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+    <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z" />
+  </>,
+);
+
 export const SelectAllIcon = icon(
   <>
     <rect x="4" y="4" width="16" height="16" rx="2" />

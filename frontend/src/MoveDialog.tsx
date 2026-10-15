@@ -21,7 +21,7 @@ export function MoveDialog({ paths, startDir, onCancel, onConfirm }: Props) {
     setError(null);
     api
       .list(dir)
-      .then((es) => live && setFolders(es.filter((e) => e.isDir && e.special !== "favoris")))
+      .then((es) => live && setFolders(es.filter((e) => e.isDir && e.special !== "favoris" && e.special !== "poubelle")))
       .catch((e) => live && setError(e.message));
     return () => {
       live = false;

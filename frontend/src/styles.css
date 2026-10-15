@@ -1526,3 +1526,35 @@ button.chip.on,
   text-align: center;
   line-height: 1.2;
 }
+
+/* Poubelle : icône pleine ou vide, nombre d'éléments, barre « Vider ». */
+.icon.special.poubelle {
+  color: var(--muted);
+}
+.icon.special.poubelle.full {
+  color: var(--accent);
+}
+.row .label .badge {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  vertical-align: 1px;
+}
+.trashbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 6px;
+}
+.menu-popup .size.deleted {
+  max-width: 260px;
+  white-space: pre-line;
+}

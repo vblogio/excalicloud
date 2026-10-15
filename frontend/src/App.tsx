@@ -104,7 +104,7 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [drawerWidth, setDrawerWidth] = useState(initialDrawerWidth);
   const [resizing, setResizing] = useState(false);
-  const [settings, setSettings] = useState<Settings>({ title: "", logo: "", channel: "latest" });
+  const [settings, setSettings] = useState<Settings>({ title: "", logo: "", channel: "latest", trashDays: 0 });
   const updateStatus = useUpdateStatus();
   const pending = pendingVersion(updateStatus, settings.channel);
   const [customizing, setCustomizing] = useState<false | "all" | "excalidraw">(false);
