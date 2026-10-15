@@ -6,6 +6,9 @@ Excalidraw auto-hébergé avec un **gestionnaire de fichiers intégré** : arbor
 - **Frontend** : React 19 + composant officiel [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw) 0.18.1 (licence MIT), build Vite **embarqué dans le binaire Go** (`embed`).
 - **Image** : multi-stage, finale en `distroless/static:nonroot` (~53 Mo), un seul conteneur, aucun accès Internet requis à l'exécution (polices Excalidraw servies localement).
 
+> Projet indépendant, non affilié à Excalidraw ni approuvé par Excalidraw s.r.o. ; il utilise le composant open source `@excalidraw/excalidraw` (MIT). Voir [Licence](#licence--license).
+> *Independent project, not affiliated with or endorsed by Excalidraw; it uses the open source `@excalidraw/excalidraw` component (MIT). See [License](#licence--license).*
+
 ## Architecture
 
 ```
@@ -365,3 +368,9 @@ frontend/src/ApiAccess.tsx  paramètres : adresse MCP, jetons personnels et conn
 - **Collaboration temps réel** : nécessiterait le serveur [excalidraw-room](https://github.com/excalidraw/excalidraw-room) (WebSocket) et la logique de réconciliation (`reconcileElements`) côté client.
 - **Espaces personnels en mode `local`** : un seul utilisateur (`local`) ; une identité transmise par le reverse proxy (`X-Forwarded-User`) permettrait un espace par compte sans OIDC.
 - Les schémas avec beaucoup d'images embarquées sont volumineux (base64 dans le JSON) ; ajuster `MAX_BODY_MB`.
+
+## Licence / License
+
+**Français.** Le code d'excalidraw-go est publié sous licence MIT : voir [`LICENSE`](LICENSE) (texte qui fait foi, en anglais) et sa traduction informative [`LICENSE.fr.md`](LICENSE.fr.md). Ce projet est indépendant : il n'est ni affilié à Excalidraw ou Excalidraw s.r.o., ni approuvé ou soutenu par eux. « Excalidraw » est une marque de son titulaire, citée uniquement pour indiquer la compatibilité. Le projet intègre et redistribue des composants tiers sous leurs propres licences, notamment Excalidraw (MIT), les icônes Tabler (MIT) et les polices fournies avec Excalidraw (SIL Open Font License 1.1, MIT) : la liste complète et les notices figurent dans [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+**English.** excalidraw-go is released under the MIT License: see [`LICENSE`](LICENSE). This is an independent project, not affiliated with, endorsed by or sponsored by Excalidraw or Excalidraw s.r.o. "Excalidraw" is a trademark of its owner, used only to describe compatibility. The project embeds and redistributes third-party components under their own licenses, including Excalidraw (MIT), Tabler Icons (MIT) and the fonts shipped with Excalidraw (SIL Open Font License 1.1, MIT): see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the full list and notices.
