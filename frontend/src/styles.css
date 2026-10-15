@@ -1059,11 +1059,113 @@ li.active > .row {
   font-size: 13px;
 }
 
-/* Dialogue « Paramètres » */
+/* Dialogue « Paramètres » : un onglet par section, une seule visible à la fois. Hauteur
+   fixe, bornée par la fenêtre, pour que la boîte ne change pas de taille d'un onglet à
+   l'autre ; seul le contenu de l'onglet défile en dernier recours, les boutons restent
+   visibles. Sur mobile, les onglets passent en ligne au-dessus du contenu et la boîte
+   prend la hauteur de l'onglet affiché. */
 .modal.settings {
-  width: min(480px, 100%);
-  max-height: min(720px, 92dvh);
+  width: min(760px, 100%);
+  height: min(480px, calc(100dvh - 32px));
+  max-height: none;
+  gap: 12px;
+}
+.settings-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 16px;
+}
+.settings-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 12px;
+  border-right: 1px solid var(--border);
+}
+.settings-tabs button {
+  justify-content: flex-start;
+  width: 100%;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+  letter-spacing: normal;
+}
+.settings-tabs button.on {
+  background: var(--ex-primary-container);
+  color: var(--ex-on-primary-container);
+  font-weight: 600;
+}
+.settings-tabs small {
+  margin-left: auto;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--ex-surface-low);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+.settings-tabs .dot {
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--warn);
+}
+.settings-panel {
+  min-width: 0;
+  min-height: 0;
   overflow-y: auto;
+  padding-right: 4px;
+}
+.settings-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings-pane[hidden] {
+  display: none;
+}
+.settings-pane h4 {
+  display: none; /* redondant avec l'onglet */
+}
+.settings .radio-group {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.settings .radio-group button {
+  min-width: 96px;
+}
+.settings .field .link {
+  align-self: flex-start;
+}
+.settings .modal-actions {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 640px) {
+  .modal.settings {
+    height: auto;
+    max-height: calc(100dvh - 32px);
+  }
+  .settings-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 10px;
+  }
+  .settings-tabs {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 0 0 8px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-tabs button {
+    width: auto;
+    flex: none;
+  }
 }
 .modal h4 {
   margin: 6px 0 0;

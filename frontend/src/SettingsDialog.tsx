@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { ApiAccess } from "./ApiAccess";
 import { api, type Channel, type Settings, type Share, type UpdateStatus } from "./api";
 import { CopyIcon, TrashIcon } from "./icons";
@@ -11,7 +11,7 @@ const MAX_TITLE = 80; // voir storage.MaxTitleLen
 interface Props {
   settings: Settings;
   update: UpdateStatus | null;
-  /** Ouvert depuis l'icône de mise à jour : affiche directement la section Excalidraw. */
+  /** Ouvert depuis l'icône de mise à jour : affiche directement l'onglet Excalidraw. */
   focusExcalidraw?: boolean;
   onChange: (s: Settings) => void;
   onClose: () => void;
@@ -34,6 +34,16 @@ const TRASH_DAYS = [
   { days: 30, label: "30 jours" },
 ];
 
+/** Onglets du dialogue : une section par onglet, pour que tout tienne sans défilement. */
+const TABS = [
+  { id: "apparence", label: "Apparence" },
+  { id: "excalidraw", label: "Excalidraw" },
+  { id: "poubelle", label: "Poubelle" },
+  { id: "partage", label: "Liens de partage" },
+  { id: "api", label: "API et MCP" },
+] as const;
+type Tab = (typeof TABS)[number]["id"];
+
 /** Paramètres partagés par tous les utilisateurs : titre, logo, version d'Excalidraw. */
 export function SettingsDialog({ settings, update, focusExcalidraw, onChange, onClose }: Props) {
   const [title, setTitle] = useState(settings.title);
@@ -41,11 +51,12 @@ export function SettingsDialog({ settings, update, focusExcalidraw, onChange, on
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [shares, setShares] = useState<Share[] | null>(null);
+  const [tab, setTab] = useState<Tab>(focusExcalidraw ? "excalidraw" : "apparence");
   const fileInput = useRef<HTMLInputElement>(null);
-  const exSection = useRef<HTMLElement>(null);
+  const tabList = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (focusExcalidraw) exSection.current?.scrollIntoView({ block: "start" });
+    if (focusExcalidraw) setTab("excalidraw");
   }, [focusExcalidraw]);
 
   const loadShares = () =>
@@ -97,6 +108,16 @@ export function SettingsDialog({ settings, update, focusExcalidraw, onChange, on
     run(() => api.uploadLogo(f));
   };
 
+  // Flèches du clavier dans la liste d'onglets (verticale sur bureau, horizontale sur mobile).
+  const onTabKey = (e: ReactKeyboardEvent) => {
+    const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const i = (TABS.findIndex((t) => t.id === tab) + step + TABS.length) % TABS.length;
+    setTab(TABS[i].id);
+    tabList.current?.querySelectorAll<HTMLButtonElement>("[role=tab]")[i]?.focus();
+  };
+
   const dirty = title.trim() !== settings.title;
   const pending = pendingVersion(update, settings.channel);
   const cmd = pending ? rebuildCommand(pending) : null;
@@ -106,6 +127,16 @@ export function SettingsDialog({ settings, update, focusExcalidraw, onChange, on
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
+
+  // Les onglets masqués restent montés : un jeton juste créé ou un titre en cours de saisie
+  // ne sont pas perdus en changeant d'onglet.
+  const pane = (id: Tab) => ({
+    id: `settings-${id}`,
+    role: "tabpanel",
+    "aria-labelledby": `settings-tab-${id}`,
+    className: "settings-pane",
+    hidden: tab !== id,
+  });
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -122,186 +153,216 @@ export function SettingsDialog({ settings, update, focusExcalidraw, onChange, on
       >
         <h3>Paramètres</h3>
 
-        <h4>Apparence</h4>
-        <label className="field">
-          <span>Titre affiché</span>
-          <input
-            className="text-input"
-            value={title}
-            maxLength={MAX_TITLE}
-            placeholder={DEFAULT_TITLE}
-            autoFocus
-            onChange={(e) => setTitle(e.target.value)}
-          />
-        </label>
-
-        <div className="field">
-          <span>Logo</span>
-          <div className="logo-edit">
-            {settings.logo ? (
-              <img className="logo big" src={api.logoUrl(settings.logo)} alt="Logo actuel" />
-            ) : (
-              <span className="logo big placeholder-logo muted" aria-hidden>
-                ?
-              </span>
-            )}
-            <div className="logo-actions">
-              <button type="button" disabled={busy} onClick={() => fileInput.current?.click()}>
-                {settings.logo ? "Remplacer…" : "Choisir un PNG…"}
+        <div className="settings-body">
+          <div className="settings-tabs" role="tablist" aria-label="Sections" ref={tabList} onKeyDown={onTabKey}>
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                id={`settings-tab-${t.id}`}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.id}
+                aria-controls={`settings-${t.id}`}
+                tabIndex={tab === t.id ? 0 : -1}
+                className={tab === t.id ? "on" : ""}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+                {t.id === "excalidraw" && pending && <i className="dot" title={`À installer : ${pending}`} />}
+                {t.id === "partage" && !!shares?.length && <small>{shares.length}</small>}
               </button>
-              {settings.logo && (
-                <button type="button" className="danger" disabled={busy} onClick={() => run(api.removeLogo)}>
-                  Retirer
-                </button>
-              )}
-              <small className="muted">PNG, recadré au centre et réduit à 64×64 px, affiché en rond.</small>
+            ))}
+          </div>
+
+          <div className="settings-panel">
+            <section {...pane("apparence")}>
+              <label className="field">
+                <span>Titre affiché</span>
+                <input
+                  className="text-input"
+                  value={title}
+                  maxLength={MAX_TITLE}
+                  placeholder={DEFAULT_TITLE}
+                  autoFocus={!focusExcalidraw}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+              </label>
+
+              <div className="field">
+                <span>Logo</span>
+                <div className="logo-edit">
+                  {settings.logo ? (
+                    <img className="logo big" src={api.logoUrl(settings.logo)} alt="Logo actuel" />
+                  ) : (
+                    <span className="logo big placeholder-logo muted" aria-hidden>
+                      ?
+                    </span>
+                  )}
+                  <div className="logo-actions">
+                    <button type="button" disabled={busy} onClick={() => fileInput.current?.click()}>
+                      {settings.logo ? "Remplacer…" : "Choisir un PNG…"}
+                    </button>
+                    {settings.logo && (
+                      <button type="button" className="danger" disabled={busy} onClick={() => run(api.removeLogo)}>
+                        Retirer
+                      </button>
+                    )}
+                    <small className="muted">PNG, recadré au centre et réduit à 64×64 px, affiché en rond.</small>
+                  </div>
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    accept="image/png"
+                    hidden
+                    onChange={(e) => {
+                      onFile(e.target.files?.[0]);
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section {...pane("excalidraw")}>
+              <div className="field">
+                <span>Version à suivre</span>
+                <div className="radio-group" role="radiogroup" aria-label="Canal d'Excalidraw">
+                  {CHANNELS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={settings.channel === c.id}
+                      className={settings.channel === c.id ? "on" : ""}
+                      disabled={busy}
+                      title={c.hint}
+                      onClick={() => settings.channel !== c.id && run(() => api.setChannel(c.id))}
+                    >
+                      {c.label}
+                      <small>{update?.tags?.[c.id] ?? "?"}</small>
+                    </button>
+                  ))}
+                </div>
+                <small className="muted">{CHANNELS.find((c) => c.id === settings.channel)?.hint}</small>
+                <p className="versions">
+                  Version installée : <b>{INSTALLED}</b>
+                  <br />
+                  {!update?.enabled
+                    ? "Vérification des mises à jour désactivée (UPDATE_CHECK=false)."
+                    : !update.tags && !update.latest
+                      ? "Registre npm injoignable pour l'instant : versions publiées inconnues."
+                      : pending
+                        ? <>À installer : <b>{pending}</b></>
+                        : "À jour pour ce canal."}
+                </p>
+                {cmd && (
+                  <>
+                    <small className="muted">
+                      Excalidraw est compilé dans l'image : changer de canal ou de version ne prend effet
+                      qu'après reconstruction, depuis le dossier du docker-compose :
+                    </small>
+                    <div className="cmd">
+                      <code>{cmd}</code>
+                      <button type="button" className="icon-btn" onClick={copy} title="Copier" aria-label="Copier la commande">
+                        <CopyIcon />
+                      </button>
+                    </div>
+                    <small className="muted">
+                      {copied
+                        ? "Commande copiée."
+                        : <>Pour conserver ce choix aux reconstructions suivantes, mettre <code>EXCALIDRAW_VERSION={pending}</code> dans <code>.env</code>. Tester l'image avant la mise en service : les versions 0.x peuvent changer d'API.</>}
+                    </small>
+                  </>
+                )}
+                <a className="link" href="https://github.com/excalidraw/excalidraw/releases" target="_blank" rel="noreferrer">
+                  Notes de version
+                </a>
+              </div>
+            </section>
+
+            <section {...pane("poubelle")}>
+              <div className="field">
+                <span>Suppression définitive automatique</span>
+                <div className="radio-group" role="radiogroup" aria-label="Purge de la poubelle">
+                  {TRASH_DAYS.map((d) => (
+                    <button
+                      key={d.days}
+                      type="button"
+                      role="radio"
+                      aria-checked={settings.trashDays === d.days}
+                      className={settings.trashDays === d.days ? "on" : ""}
+                      disabled={busy}
+                      onClick={() => settings.trashDays !== d.days && run(() => api.setTrashDays(d.days))}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+                <small className="muted">
+                  {settings.trashDays
+                    ? `Les éléments mis à la poubelle sont supprimés définitivement ${settings.trashDays} jour${settings.trashDays > 1 ? "s" : ""} après leur suppression.`
+                    : "La poubelle garde tout jusqu'à ce qu'on la vide ; son icône indique si elle contient des éléments."}
+                </small>
+              </div>
+            </section>
+
+            <section {...pane("partage")}>
+              <div className="field">
+                {shares?.length ? (
+                  <ul className="share-list all">
+                    {shares.map((s) => (
+                      <li key={s.id}>
+                        <div className="cmd">
+                          <code title={api.shareUrl(s.token)}>{s.path}</code>
+                          <button
+                            type="button"
+                            className="icon-btn danger"
+                            onClick={() => revoke(() => api.revokeShare(s.id), `Révoquer le lien vers « ${s.path} » ?`)}
+                            title="Révoquer"
+                            aria-label={`Révoquer le lien vers ${s.path}`}
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
+                        <small className="muted">
+                          Créé le {new Date(s.created).toLocaleDateString(undefined, { dateStyle: "short" })} · {fmtExpiry(s)}
+                        </small>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <small className="muted">
+                    Aucun lien actif. Pour partager un schéma en lecture seule : icône de partage de la barre du haut, ou menu
+                    « … » de l'explorateur.
+                  </small>
+                )}
+                {!!shares?.length && (
+                  <button
+                    type="button"
+                    className="danger"
+                    style={{ alignSelf: "flex-start" }}
+                    onClick={() =>
+                      revoke(
+                        api.revokeAllShares,
+                        "Révoquer tous les liens de partage ? La clé de signature est renouvelée : aucun lien existant ne fonctionnera plus.",
+                      )
+                    }
+                  >
+                    Tout révoquer
+                  </button>
+                )}
+              </div>
+            </section>
+
+            <div {...pane("api")}>
+              <ApiAccess onError={setError} />
             </div>
-            <input
-              ref={fileInput}
-              type="file"
-              accept="image/png"
-              hidden
-              onChange={(e) => {
-                onFile(e.target.files?.[0]);
-                e.target.value = "";
-              }}
-            />
           </div>
         </div>
-
-        <section className="field" ref={exSection}>
-          <h4>Excalidraw</h4>
-          <span>Version à suivre</span>
-          <div className="radio-group" role="radiogroup" aria-label="Canal d'Excalidraw">
-            {CHANNELS.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                role="radio"
-                aria-checked={settings.channel === c.id}
-                className={settings.channel === c.id ? "on" : ""}
-                disabled={busy}
-                title={c.hint}
-                onClick={() => settings.channel !== c.id && run(() => api.setChannel(c.id))}
-              >
-                {c.label}
-                <small>{update?.tags?.[c.id] ?? "?"}</small>
-              </button>
-            ))}
-          </div>
-          <small className="muted">{CHANNELS.find((c) => c.id === settings.channel)?.hint}</small>
-          <p className="versions">
-            Version installée : <b>{INSTALLED}</b>
-            <br />
-            {!update?.enabled
-              ? "Vérification des mises à jour désactivée (UPDATE_CHECK=false)."
-              : !update.tags && !update.latest
-                ? "Registre npm injoignable pour l'instant : versions publiées inconnues."
-                : pending
-                  ? <>À installer : <b>{pending}</b></>
-                  : "À jour pour ce canal."}
-          </p>
-          {cmd && (
-            <>
-              <small className="muted">
-                Excalidraw est compilé dans l'image : changer de canal ou de version ne prend effet
-                qu'après reconstruction, depuis le dossier du docker-compose :
-              </small>
-              <div className="cmd">
-                <code>{cmd}</code>
-                <button type="button" className="icon-btn" onClick={copy} title="Copier" aria-label="Copier la commande">
-                  <CopyIcon />
-                </button>
-              </div>
-              <small className="muted">
-                {copied
-                  ? "Commande copiée."
-                  : <>Pour conserver ce choix aux reconstructions suivantes, mettre <code>EXCALIDRAW_VERSION={pending}</code> dans <code>.env</code>. Tester l'image avant la mise en service : les versions 0.x peuvent changer d'API.</>}
-              </small>
-            </>
-          )}
-        </section>
-
-        <section className="field">
-          <h4>Poubelle</h4>
-          <span>Suppression définitive automatique</span>
-          <div className="radio-group" role="radiogroup" aria-label="Purge de la poubelle">
-            {TRASH_DAYS.map((d) => (
-              <button
-                key={d.days}
-                type="button"
-                role="radio"
-                aria-checked={settings.trashDays === d.days}
-                className={settings.trashDays === d.days ? "on" : ""}
-                disabled={busy}
-                onClick={() => settings.trashDays !== d.days && run(() => api.setTrashDays(d.days))}
-              >
-                {d.label}
-              </button>
-            ))}
-          </div>
-          <small className="muted">
-            {settings.trashDays
-              ? `Les éléments mis à la poubelle sont supprimés définitivement ${settings.trashDays} jour${settings.trashDays > 1 ? "s" : ""} après leur suppression.`
-              : "La poubelle garde tout jusqu'à ce qu'on la vide ; son icône indique si elle contient des éléments."}
-          </small>
-        </section>
-
-        <section className="field">
-          <h4>Liens de partage</h4>
-          {shares?.length ? (
-            <ul className="share-list all">
-              {shares.map((s) => (
-                <li key={s.id}>
-                  <div className="cmd">
-                    <code title={api.shareUrl(s.token)}>{s.path}</code>
-                    <button
-                      type="button"
-                      className="icon-btn danger"
-                      onClick={() => revoke(() => api.revokeShare(s.id), `Révoquer le lien vers « ${s.path} » ?`)}
-                      title="Révoquer"
-                      aria-label={`Révoquer le lien vers ${s.path}`}
-                    >
-                      <TrashIcon />
-                    </button>
-                  </div>
-                  <small className="muted">
-                    Créé le {new Date(s.created).toLocaleDateString(undefined, { dateStyle: "short" })} · {fmtExpiry(s)}
-                  </small>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <small className="muted">
-              Aucun lien actif. Pour partager un schéma en lecture seule : icône de partage de la barre du haut, ou menu
-              « … » de l'explorateur.
-            </small>
-          )}
-          {!!shares?.length && (
-            <button
-              type="button"
-              className="danger"
-              style={{ alignSelf: "flex-start" }}
-              onClick={() =>
-                revoke(
-                  api.revokeAllShares,
-                  "Révoquer tous les liens de partage ? La clé de signature est renouvelée : aucun lien existant ne fonctionnera plus.",
-                )
-              }
-            >
-              Tout révoquer
-            </button>
-          )}
-        </section>
-
-        <ApiAccess onError={setError} />
 
         {error && <div className="error">{error}</div>}
 
         <div className="modal-actions">
-          <a className="link" href="https://github.com/excalidraw/excalidraw/releases" target="_blank" rel="noreferrer">
-            Notes de version
-          </a>
           <span className="spacer" />
           <button type="button" onClick={onClose}>
             Fermer
