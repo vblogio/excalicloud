@@ -1429,6 +1429,11 @@ button.chip.on,
   background: var(--ex-surface-mid);
   border-radius: var(--ex-radius-lg);
 }
+/* Pas de case à cocher : on réserve sa place (16px + marge 4px + gap 4px) pour
+   que l'icône s'aligne sur celles des dossiers. */
+.entries.list .item.special > .row {
+  padding-left: 24px;
+}
 /* Favori dont l'original a disparu : barré, seul « Retirer » reste possible. */
 .item.broken .label {
   text-decoration: line-through;
