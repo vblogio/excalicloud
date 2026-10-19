@@ -15,7 +15,7 @@ import type {
 } from "@excalidraw/excalidraw/types";
 import type { OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { api, ApiError, basename, displayPath, stripExt, type Settings } from "./api";
-import { Explorer } from "./Explorer";
+import { Explorer, initialView, type View } from "./Explorer";
 import { CloseIcon, HistoryIcon, MenuIcon, MoonIcon, PinIcon, SaveIcon, SettingsIcon, ShareIcon, SunIcon, UpdateIcon } from "./icons";
 import { ShareDialog } from "./ShareDialog";
 import { HistoryDialog } from "./HistoryDialog";
@@ -97,8 +97,11 @@ export default function App() {
   const [scene, setScene] = useState<Scene | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [pinned, setPinned] = useState(initialPinned);
-  // Non épinglé : ouvert d'office tant qu'aucun schéma n'est demandé.
-  const [drawerOpen, setDrawerOpen] = useState(() => !isMobile() && (pinned || !pathFromHash()));
+  // Vue Galerie : l'explorateur couvre toute la zone de travail, comme un panneau
+  // flottant (il se referme à l'ouverture d'un schéma).
+  const [gallery, setGallery] = useState(() => initialView() === "gallery");
+  // Non épinglé ou Galerie : ouvert d'office tant qu'aucun schéma n'est demandé.
+  const [drawerOpen, setDrawerOpen] = useState(() => !isMobile() && ((pinned && !gallery) || !pathFromHash()));
   const [instant, setInstant] = useState(false); // bascule sans animation de la grille
   const [refreshKey, setRefreshKey] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -126,6 +129,8 @@ export default function App() {
   const openRef = useRef<(path: string, opts?: { skipFlush?: boolean }) => Promise<void>>(async () => {});
   const pinnedRef = useRef(pinned);
   pinnedRef.current = pinned;
+  const galleryRef = useRef(gallery);
+  galleryRef.current = gallery;
   const peek = useRef<"hover" | "click" | null>(null); // comment le panneau non épinglé a été ouvert
   const peekTimer = useRef<number>(undefined);
   const scrollShift = useRef(0); // décalage du canevas à compenser après une bascule épinglé/non épinglé
@@ -240,7 +245,7 @@ export default function App() {
         setSaveState("saved");
         if (location.hash !== `#/${path}`) history.replaceState(null, "", `#/${encodeURI(path)}`);
         store("lastScene", path);
-        if (isMobile() || !pinnedRef.current) setDrawerOpen(false);
+        if (isMobile() || !pinnedRef.current || galleryRef.current) setDrawerOpen(false);
       } catch (e) {
         setLoadError(`Impossible d'ouvrir « ${path} » : ${e instanceof Error ? e.message : e}`);
       }
@@ -254,8 +259,8 @@ export default function App() {
     excalidraw.current = null;
     setScene(null);
     history.replaceState(null, "", location.pathname);
-    // Non épinglé : l'explorateur revient pour choisir le schéma suivant.
-    if (!pinnedRef.current && !isMobile()) {
+    // Non épinglé ou Galerie : l'explorateur revient pour choisir le schéma suivant.
+    if ((!pinnedRef.current || galleryRef.current) && !isMobile()) {
       peek.current = "click";
       setDrawerOpen(true);
     }
@@ -431,7 +436,10 @@ export default function App() {
     return () => cancelAnimationFrame(id);
   }, [pinned, instant]);
 
-  const floating = !pinned && drawerOpen;
+  // Panneau par-dessus le schéma : non épinglé, ou Galerie quand un schéma est ouvert.
+  const floating = drawerOpen && (!pinned || (gallery && !!scene));
+
+  const onViewChange = useCallback((v: View) => setGallery(v === "gallery"), []);
 
   const peekOpen = () => {
     clearTimeout(peekTimer.current);
@@ -517,7 +525,7 @@ export default function App() {
 
   return (
     <div
-      className={`app ${drawerOpen ? "drawer-open" : ""} ${pinned ? "pinned" : "unpinned"} ${resizing ? "resizing" : ""} ${instant ? "instant" : ""} ${scene ? "has-scene" : ""}`}
+      className={`app ${drawerOpen ? "drawer-open" : ""} ${pinned ? "pinned" : "unpinned"} ${gallery ? "gallery" : ""} ${resizing ? "resizing" : ""} ${instant ? "instant" : ""} ${scene ? "has-scene" : ""}`}
       style={{ "--drawer-w": `${drawerWidth}px` } as CSSProperties}
     >
       <header className="topbar">
@@ -626,6 +634,7 @@ export default function App() {
           onDeleted={onDeleted}
           onHistory={showHistory}
           onShare={setShareFor}
+          onViewChange={onViewChange}
           toolbarEnd={
             <button
               className={`icon-btn pin-btn ${pinned ? "on" : ""}`}
@@ -652,7 +661,7 @@ export default function App() {
         onReset={() => setDrawerWidth(clampDrawer(DRAWER_DEFAULT))}
       />
       <div className="backdrop" onClick={() => setDrawerOpen(false)} />
-      {!pinned && !drawerOpen && (
+      {!pinned && !drawerOpen && !gallery && (
         <div className="peek-edge" aria-hidden onMouseEnter={peekOpen} onMouseLeave={peekCancel} />
       )}
 

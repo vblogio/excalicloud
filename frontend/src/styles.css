@@ -1660,3 +1660,483 @@ button.chip.on,
   max-width: 260px;
   white-space: pre-line;
 }
+
+/* --- Barre de liste : fil d'Ariane (ou nombre de résultats) et tri ---------- */
+
+.head {
+  display: contents; /* panneau latéral : barre d'outils et recherche l'une sous l'autre */
+}
+.listbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+.listbar .crumbs {
+  flex: 1;
+  min-width: 0;
+}
+.listbar .count {
+  flex: 1;
+  font-size: 13px;
+  padding-left: 6px;
+}
+.sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  color: var(--muted);
+}
+.sort select {
+  height: 26px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: var(--ex-radius-md);
+  background: transparent;
+  color: var(--ex-on-surface);
+  font: 12px var(--ex-font);
+  cursor: pointer;
+}
+.sort select:hover,
+.sort select:focus-visible {
+  border-color: var(--border);
+  background: var(--ex-surface-low);
+  outline: none;
+}
+
+/* --- Vue Galerie : l'explorateur couvre toute la zone de travail ------------ */
+
+.app.gallery.drawer-open .drawer {
+  position: fixed;
+  z-index: 20;
+  inset: var(--topbar-h) 0 0 0;
+  width: auto;
+  transform: none;
+  visibility: visible;
+  border-right: none;
+  box-shadow: none;
+}
+.app.gallery .splitter,
+.app.gallery.drawer-open .backdrop {
+  display: none;
+}
+.explorer.gallery {
+  width: 100%;
+  padding: 14px 20px 0;
+  gap: 10px;
+}
+.explorer.gallery .head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.explorer.gallery .searchbar {
+  flex: 1;
+  min-width: min(100%, 320px);
+}
+.explorer.gallery .search {
+  max-width: 640px;
+}
+.explorer.gallery .crumbs,
+.explorer.gallery .crumbs button {
+  font-size: 14px;
+}
+.gallery-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  margin: 0 -20px;
+  border-top: 1px solid var(--border);
+}
+.gallery-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 4px 20px 24px;
+}
+.gallery-scroll > .empty {
+  padding: 12px 0;
+}
+.gallery-heading {
+  margin: 14px 0 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Dossiers : cartes compactes. */
+.entries.gallery-dirs {
+  flex: none;
+  overflow: visible;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  padding-top: 10px;
+}
+.entries.gallery-dirs .row {
+  position: relative;
+  height: 100%;
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  background: var(--ex-surface-lowest);
+}
+.entries.gallery-dirs .row:hover {
+  border-color: var(--ex-primary);
+  background: var(--ex-surface-lowest);
+}
+.entries.gallery-dirs .name {
+  padding: 8px 6px 8px 8px;
+  gap: 10px;
+}
+.entries.gallery-dirs .icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--ex-radius-lg);
+  background: var(--ex-surface-mid);
+}
+.entries.gallery-dirs .label {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.entries.gallery-dirs .label small {
+  display: block;
+  font-weight: 400;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.entries.gallery-dirs .check {
+  position: absolute;
+  top: 6px;
+  left: 4px;
+  z-index: 1;
+  margin: 0;
+}
+.entries.gallery-dirs .row .tags {
+  display: none; /* les tags d'un dossier restent visibles en liste */
+}
+.entries.gallery-dirs .row .meta {
+  padding-right: 4px;
+}
+.entries.gallery-dirs .more {
+  opacity: 0;
+}
+.entries.gallery-dirs .item:hover .more,
+.entries.gallery-dirs .more.open,
+.entries.gallery-dirs .more:focus-visible {
+  opacity: 1;
+}
+
+/* Schémas : grandes tuiles avec miniature et métadonnées. */
+.entries.gallery-tiles {
+  flex: none;
+  overflow: visible;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  padding-top: 10px;
+}
+.tile > .row {
+  position: relative;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--ex-surface-lowest);
+  transition:
+    border-color 0.1s,
+    box-shadow 0.1s;
+}
+.tile > .row:hover {
+  border-color: var(--ex-primary);
+  background: var(--ex-surface-lowest);
+  box-shadow: var(--ex-shadow-island);
+}
+.tile.inspected > .row {
+  border-color: var(--ex-primary);
+  outline: 2px solid var(--ex-primary);
+  outline-offset: -2px;
+}
+.tile .name {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  border-radius: 0;
+}
+.tile .thumb,
+.tile .icon {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+.tile .label {
+  padding: 10px 12px 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.tile .check {
+  position: absolute;
+  top: 8px;
+  left: 6px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+}
+.tile .fav-badge {
+  position: absolute;
+  top: 8px;
+  left: 30px;
+  z-index: 1;
+  display: inline-flex;
+  color: #f59f00;
+  filter: drop-shadow(0 0 2px var(--ex-surface-lowest));
+}
+.tile .tile-tools {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--ex-radius-lg);
+  background: color-mix(in srgb, var(--ex-surface-lowest) 85%, transparent);
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.tile:hover .tile-tools,
+.tile.inspected .tile-tools,
+.tile .tile-tools:focus-within,
+.tile .more.open {
+  opacity: 1;
+}
+.tile .tile-tools:has(.more.open) {
+  opacity: 1;
+}
+@media (hover: none) {
+  .tile .tile-tools {
+    opacity: 1;
+  }
+}
+.tile-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 2px 12px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.tile-meta .where {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile-meta .facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 12px;
+}
+.tile-meta .facts > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.tile-meta .facts .by {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile-meta .ok {
+  color: var(--ok);
+}
+.tile-meta .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.tile-meta .snippet {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ex-on-primary-container);
+  opacity: 0.8;
+}
+
+/* Panneau Détails, à droite des tuiles. */
+.details-panel {
+  flex: none;
+  width: 340px;
+  overflow-y: auto;
+  padding: 14px 16px 24px;
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+}
+.details-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.details-head h3 {
+  flex: 1;
+  margin: 4px 0 0;
+  font-size: 16px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.details-shot {
+  display: block;
+  height: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  background: var(--thumb-bg);
+  box-shadow: none;
+}
+.details-shot .thumb {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  border: none;
+  border-radius: 0;
+}
+.details-where {
+  align-self: flex-start;
+  height: auto;
+  padding: 2px 4px;
+  gap: 4px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 12.5px;
+  letter-spacing: normal;
+  white-space: normal;
+  text-align: left;
+}
+.details-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.details-panel dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  margin: 4px 0;
+}
+.details-panel dt {
+  color: var(--muted);
+}
+.details-panel dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.details-panel dd.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.swatch-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--ex-outline-variant);
+}
+.details-panel h4 {
+  margin: 6px 0 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.details-panel section p {
+  margin: 0;
+}
+.details-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.details-panel li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+.details-panel li:last-child {
+  border-bottom: none;
+}
+.details-panel button.link {
+  height: auto;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent);
+  font-size: 13px;
+  letter-spacing: normal;
+}
+
+@media (max-width: 768px) {
+  .app.gallery.drawer-open .drawer {
+    width: auto;
+  }
+  .explorer.gallery {
+    padding: 10px 12px 0;
+  }
+  .explorer.gallery .toolbar .ex-btn span {
+    display: none;
+  }
+  .gallery-body {
+    margin: 0 -12px;
+  }
+  .gallery-scroll {
+    padding: 4px 12px 16px;
+  }
+  .entries.gallery-dirs {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+  .entries.gallery-tiles {
+    grid-template-columns: 1fr;
+  }
+  /* Détails : feuille plein écran au-dessus des tuiles. */
+  .details-panel {
+    position: fixed;
+    z-index: 30;
+    inset: var(--topbar-h) 0 0 0;
+    width: auto;
+    border-left: none;
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+  }
+}

@@ -237,3 +237,61 @@ export const LogoutIcon = icon(
     <path d="M9 12h12l-3-3M18 15l3-3" />
   </>,
 );
+
+// Vue Galerie et ses métadonnées.
+export const GalleryIcon = icon(
+  <>
+    <rect x="3" y="4" width="8" height="7" rx="1.5" />
+    <rect x="13" y="4" width="8" height="7" rx="1.5" />
+    <path d="M3 15h8M3 19h5M13 15h8M13 19h5" />
+  </>,
+);
+
+export const ClockIcon = icon(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 3" />
+  </>,
+);
+
+export const ShapesIcon = icon(
+  <>
+    <rect x="3" y="3" width="8" height="8" rx="1" />
+    <circle cx="17" cy="17" r="4" />
+    <path d="M17 3l4 7h-8z" />
+  </>,
+);
+
+export const TextIcon = icon(<path d="M6 4h12M12 4v16M9 20h6" />);
+
+export const PhotoIcon = icon(
+  <>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="9" cy="10" r="1.5" />
+    <path d="M21 16l-5-5-8 9" />
+  </>,
+);
+
+export const FrameIcon = icon(<path d="M4 7h16M4 17h16M7 4v16M17 4v16" />);
+
+export const ArrowIcon = icon(<path d="M5 19 19 5M10 5h9v9" />);
+
+export const SizeIcon = icon(
+  <>
+    <path d="M6 4h10l4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
+    <path d="M8 4v5h7V4M8 20v-6h8v6" />
+  </>,
+);
+
+export const SortIcon = icon(<path d="M4 6h9M4 12h7M4 18h5M17 4v16M14 17l3 3 3-3" />);
+
+export const InfoIcon = icon(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 8v.01M11 12h1v4h1" />
+  </>,
+);
+
+export const LinkIcon = icon(
+  <path d="M9 15l6-6M11 6l.46-.54a5 5 0 0 1 7.07 7.07l-.53.47M13 18l-.4.53a5 5 0 0 1-7.07-7.07L6 11" />,
+);

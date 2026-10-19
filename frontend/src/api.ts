@@ -22,6 +22,33 @@ export interface Entry {
   link?: string;
   /** Favori dont l'original a disparu (chemin .favoris/<lien>, à retirer). */
   broken?: boolean;
+  /** Schéma : dernier utilisateur à l'avoir enregistré ("local" hors authentification). */
+  editedBy?: string;
+  /** Vue Galerie : détails demandés à la liste ou à la recherche (details=1). */
+  details?: Details;
+}
+
+/** Détails d'une entrée (internal/storage/details.go) ; compteurs absents = 0. */
+export interface Details {
+  elements?: number;
+  texts?: number;
+  images?: number;
+  arrows?: number;
+  frames?: number;
+  frameNames?: string[];
+  /** Emprise des éléments, en px du canevas. */
+  width?: number;
+  height?: number;
+  background?: string;
+  versions?: number;
+  /** Liens de partage actifs. */
+  shares?: number;
+  /** Création, ou plus ancienne version connue si l'auteur n'est pas connu. */
+  created?: string;
+  createdBy?: string;
+  /** Dossier : sous-dossiers et schémas. */
+  dirs?: number;
+  files?: number;
 }
 
 export interface TagCount {
@@ -142,12 +169,15 @@ export const api = {
 
   me: async (): Promise<Me> => (await request("/api/me")).json(),
 
-  list: async (dir: string): Promise<Entry[]> =>
-    (await request(`/api/list?path=${q(dir)}`)).json(),
+  /** details : détails des entrées pour la vue Galerie. */
+  list: async (dir: string, details = false): Promise<Entry[]> =>
+    (await request(`/api/list?path=${q(dir)}${details ? "&details=1" : ""}`)).json(),
 
-  search: async (text: string, f: SearchFilter = {}): Promise<Hit[]> =>
+  search: async (text: string, f: SearchFilter = {}, details = false): Promise<Hit[]> =>
     (
-      await request(`/api/search?q=${q(text)}${f.tag ? `&tag=${q(f.tag)}` : ""}${f.fav ? "&fav=true" : ""}`)
+      await request(
+        `/api/search?q=${q(text)}${f.tag ? `&tag=${q(f.tag)}` : ""}${f.fav ? "&fav=true" : ""}${details ? "&details=1" : ""}`,
+      )
     ).json(),
 
   tags: async (): Promise<TagCount[]> => (await request("/api/tags")).json(),

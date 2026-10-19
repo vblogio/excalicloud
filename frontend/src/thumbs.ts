@@ -6,7 +6,8 @@ import type { AppState, BinaryFiles } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { api } from "./api";
 
-const THUMB_PX = 320;
+// Assez grand pour les tuiles de la vue Galerie (affichées jusqu'à ~420 px de large).
+export const THUMB_PX = 640;
 
 /** Rend la miniature d'une scène ; null si la scène est vide. */
 export async function renderThumb(
@@ -101,3 +102,11 @@ export function ensureThumb(path: string, version: string): Promise<ThumbResult>
   }
   return p;
 }
+
+/**
+ * Taille minimale attendue (plus grand côté, px) d'une miniature à jour pour une
+ * scène dont l'emprise est w × h : Excalidraw n'agrandit pas les petites scènes.
+ * Une miniature plus petite date d'une ancienne taille de rendu (320 px).
+ */
+export const expectedThumb = (w?: number, h?: number) =>
+  w && h ? Math.floor(Math.min(THUMB_PX, Math.max(w, h)) * 0.9) : undefined;

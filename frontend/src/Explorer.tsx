@@ -19,6 +19,8 @@ import {
   type TagCount,
 } from "./api";
 import {
+  ArrowIcon,
+  ClockIcon,
   CloseIcon,
   DeselectIcon,
   CopyIcon,
@@ -30,18 +32,26 @@ import {
   FolderIcon,
   FolderPlusIcon,
   FolderUploadIcon,
+  FrameIcon,
+  GalleryIcon,
   GridIcon,
   HistoryIcon,
+  InfoIcon,
   ListIcon,
   MoveIcon,
+  PhotoIcon,
   RefreshIcon,
   RestoreIcon,
   SearchIcon,
   SelectAllIcon,
+  ShapesIcon,
   ShareIcon,
+  SizeIcon,
+  SortIcon,
   StarFilledIcon,
   StarIcon,
   TagIcon,
+  TextIcon,
   TrashFullIcon,
   TrashIcon,
   UpIcon,
@@ -49,12 +59,15 @@ import {
   UserIcon,
 } from "./icons";
 import { ActionMenu } from "./ActionMenu";
+import { DetailsPanel } from "./DetailsPanel";
+import { fmtDate, fmtRelative, fmtSize, plural, who } from "./format";
 import { FolderGlyph } from "./folderIcons";
 import { IconDialog } from "./IconDialog";
 import { collectDrop, collectFiles, hasFiles, type Collected } from "./importer";
 import { MoveDialog } from "./MoveDialog";
 import { TagsDialog } from "./TagsDialog";
 import { Thumb } from "./Thumb";
+import { expectedThumb } from "./thumbs";
 
 export const EMPTY_SCENE = JSON.stringify({
   type: "excalidraw",
@@ -81,38 +94,64 @@ interface Props {
   onShare: (path: string) => void;
   /** Contenu ajouté au bout de la barre de recherche (bouton d'épinglage du panneau). */
   toolbarEnd?: ReactNode;
+  /** Changement de vue : la Galerie occupe toute la zone de travail (App). */
+  onViewChange?: (view: View) => void;
 }
 
-type View = "list" | "grid";
+/** Vignettes, liste, ou Galerie (grandes tuiles avec métadonnées, pleine largeur). */
+export type View = "list" | "grid" | "gallery";
 
-const fmtDate = (iso: string) =>
-  new Date(iso).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
-
-const fmtSize = (n: number) =>
-  n < 1024 ? `${n} o` : n < 1 << 20 ? `${(n / 1024).toFixed(1)} Ko` : `${(n / (1 << 20)).toFixed(1)} Mo`;
-
-const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? "s" : ""}`;
+/** Tri de l'affichage : nom (ordre du serveur), date de modification ou taille. */
+type Sort = "name" | "modified" | "size";
 
 const DND_TYPE = "application/x-excalidraw-paths";
 
-const initialView = (): View => {
+const stored = <T extends string>(key: string, allowed: readonly T[], fallback: T): T => {
   try {
-    return localStorage.getItem("explorerView") === "list" ? "list" : "grid";
+    const v = localStorage.getItem(key) as T | null;
+    return v && allowed.includes(v) ? v : fallback;
   } catch {
-    return "grid";
+    return fallback;
   }
+};
+
+export const initialView = () => stored<View>("explorerView", ["list", "grid", "gallery"], "grid");
+const initialSort = () => stored<Sort>("explorerSort", ["name", "modified", "size"], "name");
+
+/** Rang d'affichage : dossiers virtuels, puis dossiers, puis schémas. */
+const rank = (e: Entry) => (e.special ? 0 : e.isDir ? 1 : 2);
+
+const sortEntries = <T extends Entry>(list: T[], sort: Sort): T[] => {
+  if (sort === "name") return list; // ordre du serveur (nom ; pertinence pour une recherche)
+  const by =
+    sort === "modified"
+      ? (a: T, b: T) => Date.parse(b.modTime) - Date.parse(a.modTime)
+      : (a: T, b: T) => (a.isDir ? 0 : b.size - a.size);
+  return [...list].sort((a, b) => rank(a) - rank(b) || (a.special ? 0 : by(a, b)));
 };
 
 /** Un élément peut-il être déplacé dans targetDir ? (pas sur place, pas dans lui-même) */
 const canMoveInto = (path: string, targetDir: string) =>
   dirname(path) !== targetDir && targetDir !== path && !targetDir.startsWith(path + "/");
 
-export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHistory, onShare, toolbarEnd }: Props) {
+export function Explorer({
+  current,
+  refreshKey,
+  onOpen,
+  onMoved,
+  onDeleted,
+  onHistory,
+  onShare,
+  toolbarEnd,
+  onViewChange,
+}: Props) {
   const [dir, setDir] = useState(() => (current ? dirname(current) : ""));
   const [entries, setEntries] = useState<Entry[]>([]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Hit[] | null>(null);
   const [view, setView] = useState<View>(initialView);
+  const [sort, setSort] = useState<Sort>(initialSort);
+  const [inspect, setInspect] = useState<string | null>(null); // schéma du panneau Détails (Galerie)
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [anchor, setAnchor] = useState<string | null>(null); // origine d'une sélection Maj+clic
   const [menu, setMenu] = useState<{ entry: Hit; anchor: HTMLElement } | null>(null); // menu « … » ouvert
@@ -132,6 +171,8 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   const stay = useRef<string | null>(null); // schéma ouvert depuis Favoris : on reste dans Favoris
 
   const list = results ?? entries;
+  const shown = sortEntries(list, sort);
+  const gallery = view === "gallery";
   const filter = { tag: tagFilter };
   const filtering = query.trim() !== "" || tagFilter !== null;
   // Dossier Favoris : des liens vers les originaux, ni création ni déplacement.
@@ -143,6 +184,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   const closeMenu = useCallback(() => setMenu(null), []);
   // La liste change de forme : le bouton « … » d'origine disparaît.
   useEffect(closeMenu, [view, dir, results, closeMenu]);
+  useEffect(() => setInspect(null), [dir, results === null, view]);
 
   const guard = useCallback(async (fn: () => Promise<unknown>) => {
     setError(null);
@@ -156,7 +198,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   const refresh = useCallback(
     () =>
       guard(async () => {
-        const [next, tagList] = await Promise.all([api.list(dir), api.tags()]);
+        const [next, tagList] = await Promise.all([api.list(dir, gallery), api.tags()]);
         setEntries(next);
         setTags(tagList);
         // Tag filtré qui n'existe plus : filtre retiré.
@@ -169,7 +211,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
           return new Set([...s].filter((p) => still.has(p)));
         });
       }),
-    [dir, guard],
+    [dir, gallery, guard],
   );
 
   useEffect(() => {
@@ -194,15 +236,15 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
       setResults(null);
       return;
     }
-    const t = setTimeout(() => guard(async () => setResults(await api.search(query, filter))), 250);
+    const t = setTimeout(() => guard(async () => setResults(await api.search(query, filter, gallery))), 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, tagFilter, guard, refreshKey]);
+  }, [query, tagFilter, guard, refreshKey, gallery]);
 
   /** Recharge le dossier et, si une recherche est affichée, ses résultats. */
   const reload = async () => {
     await refresh();
-    if (filtering) setResults(await api.search(query, filter));
+    if (filtering) setResults(await api.search(query, filter, gallery));
   };
 
   // Délai de purge, affiché dans la poubelle (réglé dans les paramètres).
@@ -220,7 +262,16 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
     } catch {
       /* stockage indisponible */
     }
-  }, [view]);
+    onViewChange?.(view);
+  }, [view, onViewChange]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("explorerSort", sort);
+    } catch {
+      /* stockage indisponible */
+    }
+  }, [sort]);
 
   // --- Sélection -----------------------------------------------------------
 
@@ -247,7 +298,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
     setSelected((s) => new Set([...s, ...paths.slice(lo, hi + 1)]));
   };
 
-  const selectable = list.filter((e) => !e.special);
+  const selectable = shown.filter((e) => !e.special);
   const selectAll = () => setSelected(new Set(selectable.map((e) => e.path)));
 
   const onItemClick = (ev: MouseEvent, e: Entry) => {
@@ -269,7 +320,10 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
 
   const onKeyDown = (ev: KeyboardEvent) => {
     if ((ev.target as HTMLElement).tagName === "INPUT") return;
-    if (ev.key === "Escape" && selected.size > 0) {
+    if (ev.key === "Escape" && inspect) {
+      ev.preventDefault();
+      setInspect(null);
+    } else if (ev.key === "Escape" && selected.size > 0) {
       ev.preventDefault();
       clearSelection();
     } else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "a") {
@@ -548,7 +602,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
     },
   };
 
-  const big = view === "grid" ? 40 : 20;
+  const big = view === "grid" ? 40 : gallery ? 28 : 20;
   const icon = (e: Entry) =>
     e.special ? (
       <span className={`icon special ${e.special} ${e.count ? "full" : ""}`} aria-hidden>
@@ -583,6 +637,7 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
   // Dans Favoris : actions sur l'original, retrait du lien à la place de la suppression.
   const favActions = (e: Entry) => (
     <>
+      {detailsAction(e)}
       {!e.broken && (
         <>
           <button role="menuitem" onClick={() => setDir(dirname(e.path))}>
@@ -631,8 +686,19 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
     </>
   );
 
+  const detailsAction = (e: Entry) =>
+    gallery &&
+    !e.isDir &&
+    !e.broken && (
+      <button role="menuitem" onClick={() => setInspect(e.path)}>
+        <InfoIcon />
+        Détails
+      </button>
+    );
+
   const actions = (e: Entry) => (
     <>
+      {detailsAction(e)}
       <button role="menuitem" onClick={() => rename(e)}>
         <EditIcon />
         Renommer
@@ -690,41 +756,86 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
     </>
   );
 
-  const item = (e: Hit) => {
-    const isSel = selected.has(e.path);
-    const cls = [
+  const itemClass = (e: Hit) =>
+    [
       "item",
       e.isDir ? "dir" : "file",
       e.path === current ? "active" : "",
-      isSel ? "selected" : "",
+      selected.has(e.path) ? "selected" : "",
       e.special ? "special" : "",
       e.broken ? "broken" : "",
       dropTarget === e.path ? "drop" : "",
     ].join(" ");
+
+  const checkbox = (e: Hit) =>
+    !e.special && (
+      <input
+        type="checkbox"
+        className="check"
+        checked={selected.has(e.path)}
+        aria-label={`Sélectionner ${e.name}`}
+        onClick={(ev) => {
+          ev.stopPropagation();
+          if (ev.shiftKey) {
+            ev.preventDefault();
+            selectRange(e.path);
+          }
+        }}
+        onChange={() => toggle(e.path)}
+      />
+    );
+
+  const moreButton = (e: Hit) =>
+    !e.special && (
+      <button
+        className={`icon-btn more ${menu?.entry.path === e.path ? "open" : ""}`}
+        aria-label="Actions"
+        aria-haspopup="menu"
+        aria-expanded={menu?.entry.path === e.path}
+        title="Actions"
+        onClick={(ev) => {
+          const anchor = ev.currentTarget;
+          setMenu((m) => (m?.entry.path === e.path ? null : { entry: e, anchor }));
+        }}
+      >
+        <DotsIcon />
+      </button>
+    );
+
+  const tagChips = (e: Hit) =>
+    !!e.tags?.length && (
+      <span className="tags">
+        {e.tags.map((t) => (
+          <button
+            key={t}
+            className={`chip ${t === tagFilter ? "on" : ""}`}
+            title={`Filtrer sur « ${t} »`}
+            onClick={() => setTagFilter(t === tagFilter ? null : t)}
+          >
+            {t}
+          </button>
+        ))}
+      </span>
+    );
+
+  /** Galerie : contenu d'un dossier sous son nom. */
+  const dirSummary = (e: Hit) => {
+    const d = e.details;
+    if (!d) return null;
+    const parts = [d.files ? plural(d.files, "schéma") : "", d.dirs ? plural(d.dirs, "dossier") : ""].filter(Boolean);
+    return <small className="muted dir-meta">{parts.length ? parts.join(" · ") : "vide"}</small>;
+  };
+
+  const item = (e: Hit) => {
     return (
-      <li key={e.path} className={cls}>
+      <li key={e.path} className={itemClass(e)}>
         <div
           className="row"
           draggable={!e.special && !locked}
           onDragStart={(ev) => onDragStart(ev, e)}
           {...(e.isDir ? dropProps(e.path) : {})}
         >
-          {!e.special && (
-          <input
-            type="checkbox"
-            className="check"
-            checked={isSel}
-            aria-label={`Sélectionner ${e.name}`}
-            onClick={(ev) => {
-              ev.stopPropagation();
-              if (ev.shiftKey) {
-                ev.preventDefault();
-                selectRange(e.path);
-              }
-            }}
-            onChange={() => toggle(e.path)}
-          />
-          )}
+          {checkbox(e)}
           <button
             className="name"
             onClick={(ev) => onItemClick(ev, e)}
@@ -751,131 +862,249 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
               {e.special === "poubelle" && !!e.count && <small className="badge">{e.count}</small>}
               {(results || (favView && !e.broken)) && <small className="muted where"> {where(e.path)}</small>}
               {trashView && <small className="muted where"> {e.origin ? where(e.origin) : ""}</small>}
+              {gallery && e.isDir && !trashView && dirSummary(e)}
               {e.snippet && <small className="snippet">{e.snippet}</small>}
             </span>
           </button>
-          {!!e.tags?.length && (
-            <span className="tags">
-              {e.tags.map((t) => (
-                <button
-                  key={t}
-                  className={`chip ${t === tagFilter ? "on" : ""}`}
-                  title={`Filtrer sur « ${t} »`}
-                  onClick={() => setTagFilter(t === tagFilter ? null : t)}
-                >
-                  {t}
-                </button>
-              ))}
+          {tagChips(e)}
+          {(!e.isDir || trashView) && view !== "grid" && <span className="meta muted">{fmtDate(e.modTime)}</span>}
+          {moreButton(e)}
+        </div>
+      </li>
+    );
+  };
+
+  /** Galerie : tuile d'un schéma, grande miniature et métadonnées. */
+  const tile = (e: Hit) => {
+    const d = e.details ?? {};
+    const by = who(e.editedBy);
+    return (
+      <li key={e.path} className={`${itemClass(e)} tile ${inspect === e.path ? "inspected" : ""}`}>
+        <div className="row" draggable={!locked} onDragStart={(ev) => onDragStart(ev, e)}>
+          {checkbox(e)}
+          <button className="name" onClick={(ev) => onItemClick(ev, e)} title={displayPath(e.path)}>
+            {e.broken ? (
+              <span className="icon folder" aria-hidden>
+                <StarIcon size={40} />
+              </span>
+            ) : (
+              <Thumb path={e.path} version={e.modTime} minSize={expectedThumb(d.width, d.height)} />
+            )}
+            <span className="label">{stripExt(e.name)}</span>
+          </button>
+          {e.favorite && (
+            <span className="fav-badge" title="Favori">
+              <StarFilledIcon size={16} />
             </span>
           )}
-          {(!e.isDir || trashView) && view === "list" && <span className="meta muted">{fmtDate(e.modTime)}</span>}
-          {!e.special && (
-          <button
-            className={`icon-btn more ${menu?.entry.path === e.path ? "open" : ""}`}
-            aria-label="Actions"
-            aria-haspopup="menu"
-            aria-expanded={menu?.entry.path === e.path}
-            title="Actions"
-            onClick={(ev) => {
-              const anchor = ev.currentTarget;
-              setMenu((m) => (m?.entry.path === e.path ? null : { entry: e, anchor }));
-            }}
-          >
-            <DotsIcon />
-          </button>
+          <span className="tile-tools">
+            {!e.broken && (
+              <button
+                className={`icon-btn ${inspect === e.path ? "on" : ""}`}
+                aria-label="Détails"
+                title="Détails"
+                onClick={() => setInspect(inspect === e.path ? null : e.path)}
+              >
+                <InfoIcon />
+              </button>
+            )}
+            {moreButton(e)}
+          </span>
+          {!e.broken && (
+            <div className="tile-meta">
+              {(results || favView) && <small className="muted where">{where(e.path)}</small>}
+              <span className="facts">
+                <span title={`Modifié le ${fmtDate(e.modTime)}${by ? ` par ${by}` : ""}`}>
+                  <ClockIcon size={14} />
+                  {fmtRelative(e.modTime)}
+                  {by && <span className="by"> · {by}</span>}
+                </span>
+              </span>
+              <span className="facts">
+                <span title="Taille du fichier">
+                  <SizeIcon size={14} />
+                  {fmtSize(e.size)}
+                </span>
+                {!!d.versions && (
+                  <span title="Versions dans l'historique">
+                    <HistoryIcon size={14} />
+                    {plural(d.versions, "version")}
+                  </span>
+                )}
+                {!!d.shares && (
+                  <span className="ok" title="Liens de partage actifs">
+                    <ShareIcon size={14} />
+                    {plural(d.shares, "partage")}
+                  </span>
+                )}
+              </span>
+              <span className="facts">
+                <span title="Éléments">
+                  <ShapesIcon size={14} />
+                  {d.elements ? plural(d.elements, "élément") : "vide"}
+                </span>
+                {!!d.texts && (
+                  <span title="Textes">
+                    <TextIcon size={14} />
+                    {plural(d.texts, "texte")}
+                  </span>
+                )}
+                {!!d.arrows && (
+                  <span title="Flèches">
+                    <ArrowIcon size={14} />
+                    {plural(d.arrows, "flèche")}
+                  </span>
+                )}
+                {!!d.images && (
+                  <span title="Images">
+                    <PhotoIcon size={14} />
+                    {plural(d.images, "image")}
+                  </span>
+                )}
+                {!!d.frames && (
+                  <span title={d.frameNames?.length ? `Cadres : ${d.frameNames.join(", ")}` : "Cadres"}>
+                    <FrameIcon size={14} />
+                    {plural(d.frames, "cadre")}
+                  </span>
+                )}
+              </span>
+              {tagChips(e)}
+              {e.snippet && <small className="snippet">{e.snippet}</small>}
+            </div>
           )}
         </div>
       </li>
     );
   };
 
-  return (
-    <div className={`explorer ${fileDrag ? "file-drag" : ""}`} onKeyDown={onKeyDown} {...zoneProps}>
-      <div className="toolbar">
-        <button className="ex-btn" onClick={newDrawing} title="Nouveau schéma" disabled={locked}>
-          <FilePlusIcon />
-          <span>Schéma</span>
+  const upItem = !results && dir && (
+    <li className={`item dir up ${dropTarget === dirname(dir) ? "drop" : ""}`}>
+      <div className="row" {...dropProps(dirname(dir))}>
+        <button className="name" onClick={() => setDir(dirname(dir))}>
+          <span className="icon" aria-hidden>
+            <UpIcon size={view === "grid" ? 32 : 20} />
+          </span>
+          <span className="label">..</span>
         </button>
-        <button className="ex-btn" onClick={newFolder} title="Nouveau dossier" disabled={locked}>
-          <FolderPlusIcon />
-          <span>Dossier</span>
-        </button>
-        <button
-          className="ex-btn"
-          onClick={() => fileInput.current?.click()}
-          disabled={locked}
-          title="Importer des fichiers .excalidraw (ou glisser-déposer fichiers et dossiers ici)"
-        >
-          <UploadIcon />
-          <span>Importer</span>
-        </button>
-        <button
-          className="ex-btn square"
-          onClick={() => dirInput.current?.click()}
-          disabled={locked}
-          title="Importer un dossier complet (arborescence recréée, seuls les .excalidraw sont importés)"
-          aria-label="Importer un dossier"
-        >
-          <FolderUploadIcon />
-        </button>
-        <input
-          ref={fileInput}
-          type="file"
-          accept=".excalidraw"
-          multiple
-          hidden
-          onChange={(ev) => {
-            if (ev.target.files) importTree(collectFiles(ev.target.files), importDir);
-            ev.target.value = "";
-          }}
-        />
-        <input
-          ref={dirInput}
-          type="file"
-          multiple
-          hidden
-          {...{ webkitdirectory: "" }}
-          onChange={(ev) => {
-            if (ev.target.files) importTree(collectFiles(ev.target.files), importDir);
-            ev.target.value = "";
-          }}
-        />
       </div>
+    </li>
+  );
 
-      <div className="searchbar">
-        <label className="search">
-          <SearchIcon />
+  const emptyText = results
+    ? "Aucun résultat"
+    : favView
+      ? "Aucun favori : étoile ou glisser-déposer un schéma ici"
+      : trashView
+        ? "La poubelle est vide"
+        : "Dossier vide";
+
+  // Galerie : dossiers en cartes compactes, schémas en grandes tuiles.
+  const galleryDirs = shown.filter((e) => e.isDir || trashView);
+  const galleryFiles = trashView ? [] : shown.filter((e) => !e.isDir);
+  const inspected = gallery && inspect ? (shown.find((e) => e.path === inspect && !e.isDir) ?? null) : null;
+
+  return (
+    <div
+      className={`explorer ${gallery ? "gallery" : ""} ${fileDrag ? "file-drag" : ""}`}
+      onKeyDown={onKeyDown}
+      {...zoneProps}
+    >
+      <div className="head">
+        <div className="toolbar">
+          <button className="ex-btn" onClick={newDrawing} title="Nouveau schéma" disabled={locked}>
+            <FilePlusIcon />
+            <span>Schéma</span>
+          </button>
+          <button className="ex-btn" onClick={newFolder} title="Nouveau dossier" disabled={locked}>
+            <FolderPlusIcon />
+            <span>Dossier</span>
+          </button>
+          <button
+            className="ex-btn"
+            onClick={() => fileInput.current?.click()}
+            disabled={locked}
+            title="Importer des fichiers .excalidraw (ou glisser-déposer fichiers et dossiers ici)"
+          >
+            <UploadIcon />
+            <span>Importer</span>
+          </button>
+          <button
+            className="ex-btn square"
+            onClick={() => dirInput.current?.click()}
+            disabled={locked}
+            title="Importer un dossier complet (arborescence recréée, seuls les .excalidraw sont importés)"
+            aria-label="Importer un dossier"
+          >
+            <FolderUploadIcon />
+          </button>
           <input
-            type="search"
-            placeholder="Rechercher (noms, textes, IP…)"
-            value={query}
-            onChange={(ev) => setQuery(ev.target.value)}
+            ref={fileInput}
+            type="file"
+            accept=".excalidraw"
+            multiple
+            hidden
+            onChange={(ev) => {
+              if (ev.target.files) importTree(collectFiles(ev.target.files), importDir);
+              ev.target.value = "";
+            }}
           />
-        </label>
-        <div className="segmented" role="group" aria-label="Affichage">
-          <button
-            className={`icon-btn ${view === "grid" ? "on" : ""}`}
-            onClick={() => setView("grid")}
-            title="Affichage en vignettes"
-            aria-label="Affichage en vignettes"
-            aria-pressed={view === "grid"}
-          >
-            <GridIcon />
-          </button>
-          <button
-            className={`icon-btn ${view === "list" ? "on" : ""}`}
-            onClick={() => setView("list")}
-            title="Affichage en liste"
-            aria-label="Affichage en liste"
-            aria-pressed={view === "list"}
-          >
-            <ListIcon />
-          </button>
+          <input
+            ref={dirInput}
+            type="file"
+            multiple
+            hidden
+            {...{ webkitdirectory: "" }}
+            onChange={(ev) => {
+              if (ev.target.files) importTree(collectFiles(ev.target.files), importDir);
+              ev.target.value = "";
+            }}
+          />
         </div>
-        <button className="icon-btn" onClick={refresh} title="Rafraîchir" aria-label="Rafraîchir">
-          <RefreshIcon />
-        </button>
-        {toolbarEnd}
+
+        <div className="searchbar">
+          <label className="search">
+            <SearchIcon />
+            <input
+              type="search"
+              placeholder="Rechercher (noms, textes, IP…)"
+              value={query}
+              onChange={(ev) => setQuery(ev.target.value)}
+            />
+          </label>
+          <div className="segmented" role="group" aria-label="Affichage">
+            <button
+              className={`icon-btn ${view === "grid" ? "on" : ""}`}
+              onClick={() => setView("grid")}
+              title="Affichage en vignettes"
+              aria-label="Affichage en vignettes"
+              aria-pressed={view === "grid"}
+            >
+              <GridIcon />
+            </button>
+            <button
+              className={`icon-btn ${view === "list" ? "on" : ""}`}
+              onClick={() => setView("list")}
+              title="Affichage en liste"
+              aria-label="Affichage en liste"
+              aria-pressed={view === "list"}
+            >
+              <ListIcon />
+            </button>
+            <button
+              className={`icon-btn ${gallery ? "on" : ""}`}
+              onClick={() => setView("gallery")}
+              title="Galerie : grandes tuiles et détails, sur toute la largeur"
+              aria-label="Galerie"
+              aria-pressed={gallery}
+            >
+              <GalleryIcon />
+            </button>
+          </div>
+          <button className="icon-btn" onClick={refresh} title="Rafraîchir" aria-label="Rafraîchir">
+            <RefreshIcon />
+          </button>
+          {!gallery && toolbarEnd}
+        </div>
       </div>
 
       <div className="filters" role="group" aria-label="Filtres">
@@ -893,24 +1122,36 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
         ))}
       </div>
 
-      {!results && (
-        <nav className="crumbs">
-          <button className={dropTarget === "" ? "drop" : ""} onClick={() => setDir("")} {...dropProps("")}>
-            Racine
-          </button>
-          {crumbs.map((c, i) => {
-            const p = crumbs.slice(0, i + 1).join("/");
-            return (
-              <span key={p}>
-                <span className="muted"> / </span>
-                <button className={dropTarget === p ? "drop" : ""} onClick={() => setDir(p)} {...dropProps(p)}>
-                  {label(c)}
-                </button>
-              </span>
-            );
-          })}
-        </nav>
-      )}
+      <div className="listbar">
+        {results ? (
+          <span className="muted count">{plural(results.length, "résultat")}</span>
+        ) : (
+          <nav className="crumbs">
+            <button className={dropTarget === "" ? "drop" : ""} onClick={() => setDir("")} {...dropProps("")}>
+              Racine
+            </button>
+            {crumbs.map((c, i) => {
+              const p = crumbs.slice(0, i + 1).join("/");
+              return (
+                <span key={p}>
+                  <span className="muted"> / </span>
+                  <button className={dropTarget === p ? "drop" : ""} onClick={() => setDir(p)} {...dropProps(p)}>
+                    {label(c)}
+                  </button>
+                </span>
+              );
+            })}
+          </nav>
+        )}
+        <label className="sort" title="Trier">
+          <SortIcon />
+          <select value={sort} onChange={(ev) => setSort(ev.target.value as Sort)} aria-label="Trier par">
+            <option value="name">Nom</option>
+            <option value="modified">Modifié</option>
+            <option value="size">Taille</option>
+          </select>
+        </label>
+      </div>
 
       {trashView && (
         <div className="trashbar">
@@ -999,32 +1240,53 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
         </div>
       )}
 
-      <ul className={`entries ${view} ${selected.size > 0 ? "selecting" : ""}`}>
-        {!results && dir && (
-          <li className={`item dir up ${dropTarget === dirname(dir) ? "drop" : ""}`}>
-            <div className="row" {...dropProps(dirname(dir))}>
-              <button className="name" onClick={() => setDir(dirname(dir))}>
-                <span className="icon" aria-hidden>
-                  <UpIcon size={view === "grid" ? 32 : 20} />
-                </span>
-                <span className="label">..</span>
-              </button>
-            </div>
-          </li>
-        )}
-        {list.map(item)}
-        {list.length === 0 && (
-          <li className="muted empty">
-            {results
-              ? "Aucun résultat"
-              : favView
-                ? "Aucun favori : étoile ou glisser-déposer un schéma ici"
-                : trashView
-                  ? "La poubelle est vide"
-                  : "Dossier vide"}
-          </li>
-        )}
-      </ul>
+      {gallery ? (
+        <div className="gallery-body">
+          <div className={`gallery-scroll ${selected.size > 0 ? "selecting" : ""}`}>
+            {(upItem || galleryDirs.length > 0) && (
+              <>
+                {galleryFiles.length > 0 && !trashView && <h4 className="gallery-heading">Dossiers</h4>}
+                <ul className="entries gallery-dirs">
+                  {upItem}
+                  {galleryDirs.map(item)}
+                </ul>
+              </>
+            )}
+            {galleryFiles.length > 0 && (
+              <>
+                {(upItem || galleryDirs.length > 0) && <h4 className="gallery-heading">Schémas</h4>}
+                <ul className="entries gallery-tiles">{galleryFiles.map(tile)}</ul>
+              </>
+            )}
+            {list.length === 0 && <p className="muted empty">{emptyText}</p>}
+          </div>
+          {inspected && (
+            <DetailsPanel
+              entry={inspected}
+              onOpen={(p) => {
+                if (favView && p !== current) stay.current = p;
+                onOpen(p);
+              }}
+              onLocate={(d) => {
+                setQuery("");
+                setTagFilter(null);
+                setDir(d);
+              }}
+              onHistory={onHistory}
+              onShare={onShare}
+              onFavorite={(e) => toggleFavorite([e])}
+              onTag={(t) => setTagFilter(t)}
+              onClose={() => setInspect(null)}
+            />
+          )}
+        </div>
+      ) : (
+        <ul className={`entries ${view} ${selected.size > 0 ? "selecting" : ""}`}>
+          {upItem}
+          {shown.map(item)}
+          {list.length === 0 && <li className="muted empty">{emptyText}</li>}
+        </ul>
+      )}
 
       {fileDrag && (
         <div className="drop-hint" aria-hidden>
