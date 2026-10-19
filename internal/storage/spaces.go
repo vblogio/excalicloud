@@ -601,7 +601,16 @@ func (u *Space) Write(p string, data []byte, ifMatch string, create bool) (Entry
 	if err != nil {
 		return Entry{}, "", err
 	}
+	_, abs, err := st.resolve(rel)
+	if err != nil {
+		return Entry{}, "", err
+	}
+	_, missing := os.Stat(abs)
 	e, etag, err := st.Write(rel, data, ifMatch, create)
+	if err == nil {
+		st.noteEdit(e.Path, u.id, missing != nil)
+		e.EditedBy = u.id
+	}
 	return u.entry(st, e, nil), etag, err
 }
 
@@ -749,15 +758,20 @@ func (u *Space) Copy(from, to string) (Entry, error) {
 	if err != nil {
 		return Entry{}, err
 	}
+	var e Entry
 	if sf == st {
-		e, err := sf.Copy(rf, rt)
-		return u.entry(st, e, nil), err
+		e, err = sf.Copy(rf, rt)
+	} else {
+		var data []byte
+		if data, _, err = sf.Read(rf); err != nil {
+			return Entry{}, err
+		}
+		e, _, err = st.Write(rt, data, "", true)
 	}
-	data, _, err := sf.Read(rf)
-	if err != nil {
-		return Entry{}, err
+	if err == nil {
+		st.noteEdit(e.Path, u.id, true)
+		e.EditedBy = u.id
 	}
-	e, _, err := st.Write(rt, data, "", true)
 	return u.entry(st, e, nil), err
 }
 
@@ -835,6 +849,10 @@ func (u *Space) Restore(p, id string) (Entry, string, error) {
 		return Entry{}, "", err
 	}
 	e, etag, err := st.Restore(rel, id)
+	if err == nil {
+		st.noteEdit(e.Path, u.id, false)
+		e.EditedBy = u.id
+	}
 	return u.entry(st, e, nil), etag, err
 }
 

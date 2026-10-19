@@ -10,13 +10,16 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
 // Tags et favoris des fichiers et dossiers, et icône des dossiers, dans
 // .meta.json à la racine :
 // {"items":{"a/b.excalidraw":{"tags":["NSX"],"favorite":true},"a":{"icon":"server"}}}.
-// Ils suivent les renommages, déplacements et suppressions.
+// Ils suivent les renommages, déplacements et suppressions. Les schémas y
+// gardent aussi leur auteur et leur date de création, et le dernier
+// utilisateur qui les a enregistrés (details.go).
 
 const metaFile = ".meta.json"
 
@@ -31,9 +34,16 @@ type itemMeta struct {
 	Tags     []string `json:"tags,omitempty"`
 	Favorite bool     `json:"favorite,omitempty"`
 	Icon     string   `json:"icon,omitempty"` // dossiers : nom d'icône du frontend
+
+	// Schémas (details.go) : création et dernier enregistrement.
+	Created   *time.Time `json:"created,omitempty"`
+	CreatedBy string     `json:"createdBy,omitempty"`
+	EditedBy  string     `json:"editedBy,omitempty"`
 }
 
-func (m itemMeta) empty() bool { return len(m.Tags) == 0 && !m.Favorite && m.Icon == "" }
+func (m itemMeta) empty() bool {
+	return len(m.Tags) == 0 && !m.Favorite && m.Icon == "" && m.Created == nil && m.CreatedBy == "" && m.EditedBy == ""
+}
 
 // iconName : nom d'icône accepté (le frontend affiche le dossier classique
 // pour un nom qu'il ne connaît pas).
@@ -103,6 +113,8 @@ func decorate(e *Entry, meta map[string]itemMeta) {
 		e.Tags, e.Favorite = m.Tags, m.Favorite
 		if e.IsDir {
 			e.Icon = m.Icon
+		} else {
+			e.EditedBy = m.EditedBy
 		}
 	}
 }

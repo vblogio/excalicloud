@@ -1,7 +1,8 @@
 // Package api expose le Store en REST/JSON.
 //
-//	GET    /api/list?path=dir            contenu d'un dossier
-//	GET    /api/search?q=texte[&tag=t][&fav=true] recherche (noms, tags, texte des schémas)
+//	GET    /api/list?path=dir[&details=1] contenu d'un dossier (details : vue Galerie,
+//	                                     voir storage.Details)
+//	GET    /api/search?q=texte[&tag=t][&fav=true][&details=1] recherche (noms, tags, texte des schémas)
 //	GET    /api/tags                     tags utilisés et nombre d'éléments
 //	POST   /api/meta/favorite {"paths":[...],"favorite":true}  favoris
 //	POST   /api/meta/tags {"paths":[...],"add":[...],"remove":[...]} tags
@@ -175,6 +176,13 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	if wantDetails(r) {
+		ps := make([]*storage.Entry, len(entries))
+		for i := range entries {
+			ps[i] = &entries[i]
+		}
+		u.AddDetails(ps)
+	}
 	writeJSON(w, http.StatusOK, entries)
 }
 
@@ -190,7 +198,20 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	if wantDetails(r) {
+		ps := make([]*storage.Entry, len(entries))
+		for i := range entries {
+			ps[i] = &entries[i].Entry
+		}
+		u.AddDetails(ps)
+	}
 	writeJSON(w, http.StatusOK, entries)
+}
+
+// wantDetails : la vue Galerie demande les détails des entrées (details=1).
+func wantDetails(r *http.Request) bool {
+	v := r.URL.Query().Get("details")
+	return v == "1" || v == "true"
 }
 
 func (h *Handler) tags(w http.ResponseWriter, r *http.Request) {

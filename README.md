@@ -33,7 +33,7 @@ Navigateur ──HTTP──▶ conteneur excalicloud (:8080, uid 65532, rootfs r
                          ├─ .library.excalidrawlib          ← bibliothèque partagée
                          ├─ .settings.json, .logo.png       ← titre et logo de la barre
                          ├─ .thumbs/projets/réseau/sdn.excalidraw.png ← miniatures (régénérables)
-                         ├─ .meta.json                       ← tags (et anciens favoris communs)
+                         ├─ .meta.json                       ← tags, icônes, auteurs (et anciens favoris communs)
                          ├─ .users/<id>/home/...             ← espace personnel (même structure : .history, .thumbs, .trash…)
                          ├─ .users/<id>/favoris/x.excalidraw → ../../../projets/x.excalidraw ← favoris (liens symboliques)
                          ├─ .shares.json, .share-secret      ← liens de partage et clé de signature
@@ -141,7 +141,8 @@ Sans `id_token_hint`, Keycloak demande de confirmer la déconnexion ; `OIDC_LOGO
 ## Utilisation
 
 - **＋ Schéma / ＋ Dossier** : création dans le dossier courant.
-- **Vignettes / liste** : sélecteur à droite de la recherche (choix mémorisé par navigateur).
+- **Vignettes / liste / Galerie** : sélecteur à droite de la recherche (choix mémorisé par navigateur). Le tri (nom, date de modification, taille) se choisit à droite du fil d'Ariane.
+- **Galerie** : l'explorateur couvre toute la zone de travail, comme une page d'accueil. Les dossiers s'affichent en cartes (nombre de schémas et de sous-dossiers), les schémas en grandes tuiles : miniature, nom complet, date relative et dernier auteur, taille, nombre de versions et de liens de partage actifs, nombre d'éléments, textes, flèches, images et cadres, tags. Ouvrir un schéma referme la galerie (☰ ou `Échap` pour y revenir). Le bouton ⓘ d'une tuile (ou *Détails* dans son menu) ouvre le **panneau Détails** : création (date et auteur), dimensions du canevas, couleur de fond, noms des cadres, dernières versions et liens de partage avec leur expiration.
 - **⋯** sur un élément : renommer, déplacer, dupliquer, télécharger, supprimer.
 - **Sélection multiple** : case à cocher (au survol, toujours visible sur écran tactile), `Ctrl/Cmd+clic`, `Maj+clic` pour une plage, `Ctrl+A` pour tout. Tant qu'une sélection est en cours, un simple clic/tap ajoute ou retire un élément. La barre de sélection propose *Déplacer…* et la mise à la corbeille ; `Échap` annule, `Suppr` supprime.
 - **Déplacer** : glisser-déposer (souris) d'un élément — ou de toute la sélection — sur un dossier, sur `..` ou sur le fil d'Ariane ; ou *Déplacer…* qui ouvre un sélecteur de dossier (navigation, création de dossier), utilisable au doigt. En cas de conflit de nom dans la destination, les autres éléments sont tout de même déplacés et les échecs listés.
@@ -175,12 +176,12 @@ Les versions `0.x` d'Excalidraw peuvent contenir des changements incompatibles :
 
 ### Miniatures
 
-Rendues par le navigateur avec `exportToBlob` d'Excalidraw (PNG 320 px), puis stockées dans `DATA_DIR/.thumbs/` :
+Rendues par le navigateur avec `exportToBlob` d'Excalidraw (PNG 640 px au plus grand côté), puis stockées dans `DATA_DIR/.thumbs/` :
 
 - à chaque sauvegarde du schéma ouvert ;
 - à la demande pour les schémas sans miniature ou modifiés hors de l'application (import, copie de fichiers sur le volume, script) : l'explorateur charge le schéma, génère la vignette (2 en parallèle, seulement pour les éléments visibles) et l'envoie au serveur, une fois pour toutes.
 
-Une miniature plus ancienne que son schéma est ignorée (`404`) puis régénérée. Elles suivent les renommages, déplacements, copies et suppressions ; `.thumbs/` peut être supprimé sans risque. En thème sombre, elles sont inversées en CSS comme le canevas Excalidraw.
+Une miniature plus ancienne que son schéma est ignorée (`404`) puis régénérée. La Galerie régénère aussi une miniature rendue à l'ancienne taille (320 px) quand elle est trop petite pour la scène. Elles suivent les renommages, déplacements, copies et suppressions ; `.thumbs/` peut être supprimé sans risque. En thème sombre, elles sont inversées en CSS comme le canevas Excalidraw.
 
 ### Recherche
 
@@ -203,7 +204,7 @@ Le volume doit accepter les liens symboliques (ext4, xfs, btrfs, ZFS, NFS ; pas 
 
 Menu « … » d'un élément (ou barre de sélection pour plusieurs) : **Tags…**. Les tags sont libres (40 caractères, 20 par élément, saisis séparés par des virgules), comparés sans casse ni accents ; un tag déjà utilisé garde son écriture d'origine (`nsx` devient `NSX` s'il existe). La ligne de filtres sous la recherche liste les tags utilisés avec leur nombre d'éléments : un clic sur un tag affiche les éléments correspondants de toute l'arborescence (et de l'espace personnel), combinables avec le texte recherché. Les tags participent aussi à la recherche texte.
 
-Stockage : `DATA_DIR/.meta.json` (`{"items":{"chemin":{"tags":[…]}}}`, et `.meta.json` de chaque espace personnel), mis à jour aux renommages, déplacements, copies (tags seuls) et suppressions.
+Stockage : `DATA_DIR/.meta.json` (`{"items":{"chemin":{"tags":[…]}}}`, et `.meta.json` de chaque espace personnel), mis à jour aux renommages, déplacements, copies (tags seuls) et suppressions. Le même fichier retient pour chaque schéma son créateur et sa date de création (`createdBy`, `created`, pour les schémas créés à partir de cette version) et le dernier utilisateur qui l'a enregistré (`editedBy`, réécrit seulement quand il change). En mode `local` l'utilisateur est toujours `local` et n'est pas affiché.
 
 ### Partage en lecture seule
 
@@ -270,8 +271,8 @@ Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants co
 
 | Méthode | Route | Corps / paramètres | Réponse |
 |---|---|---|---|
-| GET | `/api/list?path=dir` | | `[Entry]` (dossiers puis schémas) |
-| GET | `/api/search?q=texte[&tag=t][&fav=true]` | | `[Entry + "snippet"]` (200 max) : noms et tags puis contenu, tous les mots requis ; `q` facultatif avec un filtre |
+| GET | `/api/list?path=dir[&details=1]` | | `[Entry]` (dossiers puis schémas) ; `editedBy` = dernier utilisateur à avoir enregistré le schéma ; avec `details=1`, `details` = compteurs (`elements`, `texts`, `arrows`, `images`, `frames`, `frameNames`), emprise `width`×`height`, `background`, `versions`, `shares` actifs, `created`/`createdBy` ; pour un dossier `dirs` et `files` |
+| GET | `/api/search?q=texte[&tag=t][&fav=true][&details=1]` | | `[Entry + "snippet"]` (200 max) : noms et tags puis contenu, tous les mots requis ; `q` facultatif avec un filtre |
 | GET | `/api/tags` | | `[{"name","count"}]` |
 | POST | `/api/meta/favorite` | `{"paths":[…],"favorite":true}` | `204` ; schémas seulement, favoris de l'utilisateur (liens dans `.users/<id>/favoris`) |
 | POST | `/api/meta/tags` | `{"paths":[…],"add":["NSX"],"remove":["old"]}` | `204` |
@@ -343,12 +344,14 @@ cmd/server/main.go          serveur HTTP, SPA embarquée, choix de l'authentific
 internal/auth/              OIDC (PKCE, vérification de l'ID Token, JWKS) et sessions signées
 internal/storage/           accès disque : sécurité des chemins, écriture atomique, ETag, corbeille, historique
 internal/storage/spaces.go  espaces personnels (.perso) et favoris par utilisateur (.favoris, liens symboliques)
+internal/storage/details.go détails de la Galerie (compteurs, versions, partages, création, dernier auteur)
 internal/api/               routes REST
 internal/tokens/            jetons d'API (hachés), authentification Bearer, serveur d'autorisation OAuth 2.1
 internal/mcp/               serveur MCP (JSON-RPC, outils, normalisation des éléments Excalidraw)
 web/embed.go                embarque web/dist (produit par le build Vite)
 frontend/src/App.tsx        éditeur Excalidraw, sauvegarde auto, conflits, bibliothèque
-frontend/src/Explorer.tsx   gestionnaire de fichiers (vignettes/liste, sélection multiple, glisser-déposer)
+frontend/src/Explorer.tsx   gestionnaire de fichiers (vignettes/liste/galerie, tri, sélection multiple, glisser-déposer)
+frontend/src/DetailsPanel.tsx panneau Détails de la Galerie (métadonnées, versions, partages)
 frontend/src/MoveDialog.tsx sélecteur de dossier « Déplacer vers… »
 frontend/src/Thumb.tsx      vignette chargée à l'affichage, générée si absente
 frontend/src/thumbs.ts      rendu PNG des miniatures et file de génération

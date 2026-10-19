@@ -26,10 +26,11 @@ type Hit struct {
 }
 
 type indexDoc struct {
-	mod  time.Time
-	size int64
-	text string // texte extrait, une ligne par élément
-	fold string // texte normalisé (minuscules, sans accents), même nombre de runes
+	mod   time.Time
+	size  int64
+	text  string     // texte extrait, une ligne par élément
+	fold  string     // texte normalisé (minuscules, sans accents), même nombre de runes
+	stats SceneStats // compteurs d'éléments, dimensions (details.go)
 }
 
 type textIndex struct {
@@ -63,19 +64,28 @@ var foldMap = func() map[rune]rune {
 	return m
 }()
 
-// sceneText extrait le texte d'un schéma Excalidraw (éléments non supprimés).
-func sceneText(data []byte) string {
+// parseScene extrait le texte d'un schéma (textes et libellés, noms de
+// cadres, liens ; une ligne par élément) et ses statistiques (details.go).
+func parseScene(data []byte) (string, SceneStats) {
 	var doc struct {
 		Elements []struct {
-			Text         string `json:"text"`
-			OriginalText string `json:"originalText"`
-			Name         string `json:"name"`
-			Link         string `json:"link"`
-			IsDeleted    bool   `json:"isDeleted"`
+			Type         string  `json:"type"`
+			Text         string  `json:"text"`
+			OriginalText string  `json:"originalText"`
+			Name         string  `json:"name"`
+			Link         string  `json:"link"`
+			IsDeleted    bool    `json:"isDeleted"`
+			X            float64 `json:"x"`
+			Y            float64 `json:"y"`
+			Width        float64 `json:"width"`
+			Height       float64 `json:"height"`
 		} `json:"elements"`
+		AppState struct {
+			ViewBackgroundColor string `json:"viewBackgroundColor"`
+		} `json:"appState"`
 	}
 	if json.Unmarshal(data, &doc) != nil {
-		return ""
+		return "", SceneStats{}
 	}
 	var b strings.Builder
 	add := func(s string) {
@@ -85,6 +95,8 @@ func sceneText(data []byte) string {
 			b.WriteByte('\n')
 		}
 	}
+	st := SceneStats{Background: doc.AppState.ViewBackgroundColor}
+	var box bounds
 	for _, e := range doc.Elements {
 		if e.IsDeleted {
 			continue
@@ -96,11 +108,15 @@ func sceneText(data []byte) string {
 		}
 		add(e.Name)
 		add(e.Link)
+		st.count(e.Type, e.Name)
+		box.add(e.X, e.Y, e.Width, e.Height)
 	}
-	return b.String()
+	st.Width, st.Height = box.size()
+	return b.String(), st
 }
 
-// content renvoie le texte indexé d'un schéma, relu seulement s'il a changé.
+// content renvoie le texte indexé d'un schéma, relu seulement s'il a changé ;
+// appelé sous index.mu.
 func (s *Store) content(rel, abs string, fi fs.FileInfo) indexDoc {
 	d, ok := s.index.docs[rel]
 	if ok && d.mod.Equal(fi.ModTime()) && d.size == fi.Size() {
@@ -108,7 +124,7 @@ func (s *Store) content(rel, abs string, fi fs.FileInfo) indexDoc {
 	}
 	d = indexDoc{mod: fi.ModTime(), size: fi.Size()}
 	if b, err := os.ReadFile(abs); err == nil {
-		d.text = sceneText(b)
+		d.text, d.stats = parseScene(b)
 		d.fold = fold(d.text)
 	}
 	s.index.docs[rel] = d

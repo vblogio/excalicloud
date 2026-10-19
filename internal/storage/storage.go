@@ -50,7 +50,11 @@ type Entry struct {
 
 	Tags     []string `json:"tags,omitempty"`
 	Favorite bool     `json:"favorite,omitempty"`
-	Icon     string   `json:"icon,omitempty"` // dossier : icône choisie (meta.go)
+	Icon     string   `json:"icon,omitempty"`     // dossier : icône choisie (meta.go)
+	EditedBy string   `json:"editedBy,omitempty"` // schéma : dernier utilisateur à l'avoir enregistré
+
+	// Détails (details.go), seulement sur demande (/api/list?details=1).
+	Details *Details `json:"details,omitempty"`
 
 	// Dossiers virtuels et favoris (spaces.go).
 	Special string `json:"special,omitempty"` // "favoris" ou "perso" : entrée de la racine
