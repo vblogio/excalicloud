@@ -305,7 +305,7 @@ button.danger:hover:not(:disabled) {
   font-weight: 400;
 }
 
-/* Logo + titre personnalisés (clic : dialogue « Personnaliser »). */
+/* Logo + titre personnalisés (clic : retour à la racine de l'explorateur). */
 .brand {
   display: flex;
   align-items: center;

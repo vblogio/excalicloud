@@ -110,6 +110,7 @@ export default function App() {
   const [customizing, setCustomizing] = useState<false | "all" | "excalidraw">(false);
   const [historyFor, setHistoryFor] = useState<string | null>(null);
   const [shareFor, setShareFor] = useState<string | null>(null);
+  const [homeKey, setHomeKey] = useState(0);
 
   const excalidraw = useRef<ExcalidrawImperativeAPI | null>(null);
   const pathRef = useRef<string | null>(null); // schéma ouvert (survit aux renommages)
@@ -534,7 +535,16 @@ export default function App() {
         >
           <MenuIcon />
         </button>
-        <button className="brand" title="Paramètres" onClick={() => setCustomizing("all")}>
+        <button
+          className="brand"
+          title="Revenir à la racine"
+          onClick={() => {
+            setHomeKey((k) => k + 1);
+            clearTimeout(peekTimer.current);
+            peek.current = "click";
+            setDrawerOpen(true);
+          }}
+        >
           {settings.logo && <img className="logo" src={api.logoUrl(settings.logo)} alt="" />}
           <span className="brand-title">{appTitle}</span>
         </button>
@@ -626,6 +636,7 @@ export default function App() {
           onDeleted={onDeleted}
           onHistory={showHistory}
           onShare={setShareFor}
+          homeKey={homeKey}
           toolbarEnd={
             <button
               className={`icon-btn pin-btn ${pinned ? "on" : ""}`}
