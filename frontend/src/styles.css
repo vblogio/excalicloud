@@ -1573,8 +1573,12 @@ button.chip.on,
 .icon.special.favoris {
   color: #f59f00;
 }
+/* Vert, plus clair en sombre pour garder le contraste. */
 .icon.special.perso {
-  color: var(--accent);
+  color: #2f9e44;
+}
+:root[data-theme="dark"] .icon.special.perso {
+  color: #51cf66;
 }
 .item.special > .row {
   background: var(--ex-surface-mid);
