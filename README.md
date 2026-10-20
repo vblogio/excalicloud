@@ -157,7 +157,7 @@ Sans `id_token_hint`, Keycloak demande de confirmer la déconnexion ; `OIDC_LOGO
 - **Mise à jour d'Excalidraw** : quand la version publiée sur le canal choisi (voir *Paramètres*) diffère de celle embarquée, une icône apparaît à droite de la barre du haut ; un clic ouvre les paramètres sur la commande de reconstruction (voir *Mettre à jour Excalidraw*).
 - **Mode clair/sombre** : bouton ☀/☾ à droite de la barre du haut ; s'applique à l'interface et au canevas Excalidraw, reste synchronisé avec le choix du menu d'Excalidraw. Mémorisé par navigateur.
 - **Barre du haut** : le logo renvoie vers https://vblog.io (nouvel onglet ; titre affiché à défaut de logo). À sa droite, le chemin de l'emplacement courant (dossier de l'explorateur, ou dossier et nom du schéma ouvert) : un clic sur un niveau affiche ce dossier en Galerie à la place du schéma. Le schéma est d'abord enregistré, puis fermé ; s'il n'a pas pu être enregistré, il reste ouvert sous la Galerie.
-- **Paramètres** : bouton ⚙ à droite de la barre. Section *Apparence* : titre et logo. Section *Excalidraw* : canal suivi, *Stable* (`latest`) ou *Préversion* (`next`), versions publiées et commande de reconstruction. Les paramètres sont stockés dans `DATA_DIR/.settings.json`.
+- **Paramètres** : bouton ⚙ à droite de la barre. Section *Apparence* : titre, logo et tri par défaut de la liste des schémas (*Nom*, *Date de modification* ou *Taille*, appliqué à l'explorateur et à la Galerie ; les dossiers restent en tête). Section *Excalidraw* : canal suivi, *Stable* (`latest`) ou *Préversion* (`next`), versions publiées et commande de reconstruction. Les paramètres sont stockés dans `DATA_DIR/.settings.json`.
 - **Titre et logo** : communs à tous les utilisateurs. Le logo (PNG, 5 Mo max) est recadré au centre, réduit à 64×64 px côté serveur et affiché dans un masque rond (34 px dans la barre, net sur écran HiDPI ; taille réglable via `--logo-size` dans `styles.css`).
 
 ### Mettre à jour Excalidraw
@@ -296,8 +296,8 @@ Tous les chemins sont relatifs à `DATA_DIR`, en notation `/`. Les composants co
 | POST | `/api/shares/revoke-all` | | `204` (tous les liens, nouvelle clé) |
 | GET | `/api/public/<jeton>` | | `{"name","title","logo","scene"}`, **hors authentification** ; `404` si invalide, expiré ou révoqué |
 | GET/PUT | `/api/library` | bibliothèque `excalidrawlib` | |
-| GET | `/api/settings` | | `{"title":"...","logo":"<version>","channel":"latest"}` (`logo` vide sans logo) |
-| PUT | `/api/settings` | `{"title":"..."}` (80 caractères max, vide = titre par défaut) et/ou `{"channel":"latest"\|"next"}` | réglages |
+| GET | `/api/settings` | | `{"title":"...","logo":"<version>","channel":"latest","trashDays":0,"sort":"name"}` (`logo` vide sans logo) |
+| PUT | `/api/settings` | `{"title":"..."}` (80 caractères max, vide = titre par défaut) et/ou `{"channel":"latest"\|"next"}` et/ou `{"trashDays":N}` et/ou `{"sort":"name"\|"modified"\|"size"}` | réglages |
 | GET | `/api/logo?v=<version>` | | PNG 64×64 ; `404` sans logo |
 | PUT | `/api/logo` | PNG (5 Mo, 8192×8192 px max) | réglages ; image recadrée et ré-encodée |
 | DELETE | `/api/logo` | | réglages |

@@ -43,22 +43,33 @@ var ErrInvalidImage = errors.New("image invalide")
 // DefaultChannel est le canal npm d'Excalidraw suivi par défaut (versions stables).
 const DefaultChannel = "latest"
 
+// DefaultSort est le tri initial de l'explorateur : par nom.
+const DefaultSort = "name"
+
+// validSort : tris proposés par l'explorateur (nom, date de modification, taille).
+func validSort(sort string) bool {
+	return sort == "name" || sort == "modified" || sort == "size"
+}
+
 // Settings est l'état exposé au client. Logo vaut "" sans logo, sinon une
 // version (date) à ajouter à l'URL pour invalider le cache navigateur.
 // Channel est le canal npm d'Excalidraw (latest ou next) dont l'interface
 // signale les nouvelles versions. TrashDays est la durée de conservation des
-// éléments de la corbeille (0 : jusqu'à ce qu'on la vide).
+// éléments de la corbeille (0 : jusqu'à ce qu'on la vide). Sort est le tri
+// appliqué à l'ouverture de l'explorateur (name, modified ou size).
 type Settings struct {
 	Title     string `json:"title"`
 	Logo      string `json:"logo"`
 	Channel   string `json:"channel"`
 	TrashDays int    `json:"trashDays"`
+	Sort      string `json:"sort"`
 }
 
 type settingsDisk struct {
 	Title     string `json:"title"`
 	Channel   string `json:"channel,omitempty"`
 	TrashDays int    `json:"trashDays,omitempty"`
+	Sort      string `json:"sort,omitempty"`
 }
 
 func (s *Store) readSettingsDisk() (settingsDisk, error) {
@@ -102,9 +113,12 @@ func (s *Store) ReadSettings() (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
-	st := Settings{Title: d.Title, Channel: d.Channel, TrashDays: d.TrashDays}
+	st := Settings{Title: d.Title, Channel: d.Channel, TrashDays: d.TrashDays, Sort: d.Sort}
 	if !update.ValidChannel(st.Channel) {
 		st.Channel = DefaultChannel
+	}
+	if !validSort(st.Sort) {
+		st.Sort = DefaultSort
 	}
 	if fi, err := os.Stat(filepath.Join(s.root, logoFile)); err == nil {
 		st.Logo = strconv.FormatInt(fi.ModTime().UnixNano(), 36)
@@ -118,6 +132,14 @@ func (s *Store) WriteChannel(channel string) (Settings, error) {
 		return Settings{}, fmt.Errorf("%w : canal %q (latest ou next)", ErrInvalidPath, channel)
 	}
 	return s.updateSettings(func(d *settingsDisk) { d.Channel = channel })
+}
+
+// WriteSort enregistre le tri par défaut de l'explorateur (name, modified ou size).
+func (s *Store) WriteSort(sort string) (Settings, error) {
+	if !validSort(sort) {
+		return Settings{}, fmt.Errorf("%w : tri %q (name, modified ou size)", ErrInvalidPath, sort)
+	}
+	return s.updateSettings(func(d *settingsDisk) { d.Sort = sort })
 }
 
 // WriteTrashDays règle la purge automatique de la corbeille (0 : désactivée).

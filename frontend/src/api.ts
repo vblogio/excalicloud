@@ -76,12 +76,17 @@ export interface MoveResult {
 /** Canal npm d'Excalidraw : latest (stable) ou next (préversion). */
 export type Channel = "latest" | "next";
 
-/** Paramètres partagés ; logo = "" sans logo, sinon sa version ; trashDays = 0 : poubelle jamais purgée. */
+/** Tri de la liste des schémas : nom, date de modification ou taille. */
+export type Sort = "name" | "modified" | "size";
+
+/** Paramètres partagés ; logo = "" sans logo, sinon sa version ; trashDays = 0 : poubelle jamais purgée ;
+ * sort : tri appliqué à l'ouverture de l'explorateur. */
 export interface Settings {
   title: string;
   logo: string;
   channel: Channel;
   trashDays: number;
+  sort: Sort;
 }
 
 /** Versions d'Excalidraw publiées sur npm par canal (vide si inconnu ou désactivé). */
@@ -294,6 +299,9 @@ export const api = {
 
   setChannel: async (channel: Channel): Promise<Settings> =>
     (await request("/api/settings", { ...json({ channel }), method: "PUT" })).json(),
+
+  setSort: async (sort: Sort): Promise<Settings> =>
+    (await request("/api/settings", { ...json({ sort }), method: "PUT" })).json(),
 
   /** days = 0 : la poubelle n'est jamais purgée. */
   setTrashDays: async (trashDays: number): Promise<Settings> =>

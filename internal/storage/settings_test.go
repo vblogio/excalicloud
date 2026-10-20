@@ -21,7 +21,7 @@ func encodePNG(t *testing.T, img image.Image) []byte {
 
 func TestTitle(t *testing.T) {
 	s := newStore(t)
-	if st, err := s.ReadSettings(); err != nil || st != (Settings{Channel: DefaultChannel}) {
+	if st, err := s.ReadSettings(); err != nil || st != (Settings{Channel: DefaultChannel, Sort: DefaultSort}) {
 		t.Fatalf("défauts : %+v, %v", st, err)
 	}
 	st, err := s.WriteTitle("  Schémas vLab  ")
@@ -59,6 +59,26 @@ func TestChannel(t *testing.T) {
 		t.Fatalf("canal invalide accepté : %v", err)
 	}
 	if st, _ := s.ReadSettings(); st.Channel != "next" || st.Title != "Autre" {
+		t.Fatalf("relu : %+v", st)
+	}
+}
+
+func TestSort(t *testing.T) {
+	s := newStore(t)
+	if st, _ := s.ReadSettings(); st.Sort != DefaultSort {
+		t.Fatalf("tri par défaut : %+v", st)
+	}
+	if _, err := s.WriteChannel("next"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := s.WriteSort("modified")
+	if err != nil || st.Sort != "modified" || st.Channel != "next" {
+		t.Fatalf("tri : %+v, %v", st, err)
+	}
+	if _, err := s.WriteSort("date"); !errors.Is(err, ErrInvalidPath) {
+		t.Fatalf("tri invalide accepté : %v", err)
+	}
+	if st, _ := s.ReadSettings(); st.Sort != "modified" {
 		t.Fatalf("relu : %+v", st)
 	}
 }

@@ -27,8 +27,9 @@
 //	POST   /api/shares/revoke-all                révocation de tous les liens
 //	GET    /api/public/{jeton}                   schéma partagé (sans authentification)
 //	GET    /api/library  /  PUT /api/library      bibliothèque Excalidraw
-//	GET    /api/settings / PUT {"title","channel","trashDays"} paramètres (titre, logo, canal,
-//	                                              purge de la poubelle après N jours, 0 : jamais)
+//	GET    /api/settings / PUT {"title","channel","trashDays","sort"} paramètres (titre, logo, canal,
+//	                                              purge de la poubelle après N jours, 0 : jamais,
+//	                                              tri par défaut name|modified|size)
 //	GET    /api/logo  /  PUT (image/png)  /  DELETE   logo 64x64
 //	GET    /api/update                    dernière version d'Excalidraw sur npm
 //
@@ -689,6 +690,7 @@ type settingsReq struct {
 	Title     *string `json:"title"`
 	Channel   *string `json:"channel"`
 	TrashDays *int    `json:"trashDays"`
+	Sort      *string `json:"sort"`
 }
 
 func (h *Handler) writeSettings(w http.ResponseWriter, r *http.Request) {
@@ -702,6 +704,9 @@ func (h *Handler) writeSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if err == nil && req.Channel != nil {
 		st, err = h.Store.WriteChannel(*req.Channel)
+	}
+	if err == nil && req.Sort != nil {
+		st, err = h.Store.WriteSort(*req.Sort)
 	}
 	if err == nil && req.TrashDays != nil {
 		if st, err = h.Store.WriteTrashDays(*req.TrashDays); err == nil {

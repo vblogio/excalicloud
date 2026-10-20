@@ -108,7 +108,7 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [drawerWidth, setDrawerWidth] = useState(initialDrawerWidth);
   const [resizing, setResizing] = useState(false);
-  const [settings, setSettings] = useState<Settings>({ title: "", logo: "", channel: "latest", trashDays: 0 });
+  const [settings, setSettings] = useState<Settings>({ title: "", logo: "", channel: "latest", trashDays: 0, sort: "name" });
   const updateStatus = useUpdateStatus();
   const pending = pendingVersion(updateStatus, settings.channel);
   const [customizing, setCustomizing] = useState<false | "all" | "excalidraw">(false);
@@ -688,6 +688,7 @@ export default function App() {
           onViewChange={onViewChange}
           onDirChange={setBrowseDir}
           goto={goto}
+          defaultSort={settings.sort}
           toolbarEnd={
             <button
               className={`icon-btn pin-btn ${pinned ? "on" : ""}`}

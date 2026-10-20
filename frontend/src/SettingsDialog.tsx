@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { ApiAccess } from "./ApiAccess";
-import { api, type Channel, type Settings, type Share, type UpdateStatus } from "./api";
+import { api, type Channel, type Settings, type Share, type Sort, type UpdateStatus } from "./api";
 import { CopyIcon, TrashIcon } from "./icons";
 import { fmtExpiry } from "./ShareDialog";
 import { INSTALLED, pendingVersion, rebuildCommand } from "./update";
@@ -24,6 +24,13 @@ const CHANNELS: { id: Channel; label: string; hint: string }[] = [
     label: "Préversion",
     hint: "next : construite à chaque modification de la branche principale d'Excalidraw. Nouveautés en avance, stabilité non garantie. Son numéro (0.18.0-<commit>) est inférieur à la dernière stable alors que le code est plus récent.",
   },
+];
+
+/** Tris proposés pour la liste des schémas (les dossiers restent en tête). */
+const SORTS: { id: Sort; label: string }[] = [
+  { id: "name", label: "Par nom" },
+  { id: "modified", label: "Par date de modification" },
+  { id: "size", label: "Par taille" },
 ];
 
 /** Délais de purge de la poubelle (0 : jamais). */
@@ -220,6 +227,29 @@ export function SettingsDialog({ settings, update, focusExcalidraw, onChange, on
                     }}
                   />
                 </div>
+              </div>
+
+              <div className="field">
+                <span>Tri par défaut</span>
+                <div className="radio-group" role="radiogroup" aria-label="Tri par défaut de la liste">
+                  {SORTS.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={settings.sort === s.id}
+                      className={settings.sort === s.id ? "on" : ""}
+                      disabled={busy}
+                      onClick={() => settings.sort !== s.id && run(() => api.setSort(s.id))}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+                <small className="muted">
+                  Ordre de l'explorateur et de la Galerie à l'ouverture, pour tous les utilisateurs. Les dossiers restent
+                  en tête ; le menu Trier change l'ordre pour la session.
+                </small>
               </div>
             </section>
 

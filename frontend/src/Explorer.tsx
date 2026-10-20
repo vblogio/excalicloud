@@ -16,6 +16,7 @@ import {
   withExt,
   type Entry,
   type Hit,
+  type Sort,
   type TagCount,
 } from "./api";
 import {
@@ -100,13 +101,12 @@ interface Props {
   onDirChange?: (dir: string) => void;
   /** Navigation demandée par le parent (chemin de la barre du haut) ; seq change à chaque demande. */
   goto?: { dir: string; view?: View; seq: number };
+  /** Tri par défaut (Paramètres) : appliqué à l'ouverture et à chaque changement du réglage. */
+  defaultSort?: Sort;
 }
 
 /** Vignettes, liste, ou Galerie (grandes tuiles avec métadonnées, pleine largeur). */
 export type View = "list" | "grid" | "gallery";
-
-/** Tri de l'affichage : nom (ordre du serveur), date de modification ou taille. */
-type Sort = "name" | "modified" | "size";
 
 const DND_TYPE = "application/x-excalidraw-paths";
 
@@ -120,7 +120,6 @@ const stored = <T extends string>(key: string, allowed: readonly T[], fallback: 
 };
 
 export const initialView = () => stored<View>("explorerView", ["list", "grid", "gallery"], "grid");
-const initialSort = () => stored<Sort>("explorerSort", ["name", "modified", "size"], "name");
 
 /** Rang d'affichage : dossiers virtuels, puis dossiers, puis schémas. */
 const rank = (e: Entry) => (e.special ? 0 : e.isDir ? 1 : 2);
@@ -150,13 +149,14 @@ export function Explorer({
   onViewChange,
   onDirChange,
   goto,
+  defaultSort = "name",
 }: Props) {
   const [dir, setDir] = useState(() => (current ? dirname(current) : ""));
   const [entries, setEntries] = useState<Entry[]>([]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Hit[] | null>(null);
   const [view, setView] = useState<View>(initialView);
-  const [sort, setSort] = useState<Sort>(initialSort);
+  const [sort, setSort] = useState<Sort>(defaultSort); // le menu « Trier » change l'affichage pour la session
   const [inspect, setInspect] = useState<string | null>(null); // schéma du panneau Détails (Galerie)
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [anchor, setAnchor] = useState<string | null>(null); // origine d'une sélection Maj+clic
@@ -283,13 +283,7 @@ export function Explorer({
     onViewChange?.(view);
   }, [view, onViewChange]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("explorerSort", sort);
-    } catch {
-      /* stockage indisponible */
-    }
-  }, [sort]);
+  useEffect(() => setSort(defaultSort), [defaultSort]);
 
   // --- Sélection -----------------------------------------------------------
 
