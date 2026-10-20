@@ -305,8 +305,56 @@ button.danger:hover:not(:disabled) {
   font-weight: 400;
 }
 
-/* Logo + titre personnalisés (clic : dialogue « Personnaliser »). */
+/* Chemin du dossier affiché (ou du schéma ouvert), chaque niveau cliquable. */
+.topbar .path {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.topbar .path .seg {
+  display: flex;
+  align-items: center;
+  min-width: 2.5em;
+  flex-shrink: 1;
+}
+.topbar .path .seg:last-child {
+  flex-shrink: 0;
+  max-width: 60%;
+}
+.topbar .path .sep {
+  padding: 0 2px;
+}
+.topbar .path button,
+.topbar .path .scene-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  height: auto;
+  padding: 4px 6px;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  font: inherit;
+  border-radius: var(--ex-radius-lg);
+}
+.topbar .path button:focus:not(:focus-visible) {
+  background: transparent;
+}
+.topbar .path button:hover {
+  background: var(--ex-surface-mid, var(--ex-surface-low));
+}
+.topbar .path .scene-name {
+  font-weight: 600;
+}
+
+/* Logo (lien vers le site), ou titre à défaut de logo. */
 .brand {
+  text-decoration: none;
+  color: inherit;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1837,6 +1885,7 @@ button.chip.on,
   overflow: visible;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-auto-rows: 1fr; /* toutes les tuiles, dossiers compris, ont la même taille */
   gap: 14px;
   padding-top: 10px;
 }
@@ -1980,6 +2029,32 @@ button.chip.on,
   white-space: nowrap;
   color: var(--ex-on-primary-container);
   opacity: 0.8;
+}
+
+/* Tuile de dossier : grande icône à la place de la miniature. */
+.dir-tile .icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ex-surface-low);
+  color: var(--ex-primary);
+}
+.dir-tile.up .icon {
+  color: var(--muted);
+}
+.dir-tile.drop > .row {
+  border-color: var(--ex-primary);
+  outline: 2px solid var(--ex-primary);
+  outline-offset: -2px;
+}
+.dir-tile .name {
+  flex: none; /* contenu du dossier juste sous son nom */
+}
+.entries .dir-tile.up .row {
+  padding-left: 0;
+}
+.dir-tile .dir-meta {
+  font-size: 12px;
 }
 
 /* Panneau Détails, à droite des tuiles. */
@@ -2129,6 +2204,11 @@ button.chip.on,
   }
   .entries.gallery-tiles {
     grid-template-columns: 1fr;
+    grid-auto-rows: auto;
+  }
+  /* Une colonne : les dossiers gardent la largeur des schémas, en moins haut. */
+  .dir-tile .icon {
+    aspect-ratio: 16 / 5;
   }
   /* Détails : feuille plein écran au-dessus des tuiles. */
   .details-panel {

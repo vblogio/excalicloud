@@ -14,7 +14,7 @@ import type {
   LibraryItems,
 } from "@excalidraw/excalidraw/types";
 import type { OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
-import { api, ApiError, basename, displayPath, stripExt, type Settings } from "./api";
+import { api, ApiError, basename, dirname, label, stripExt, type Settings } from "./api";
 import { Explorer, initialView, type View } from "./Explorer";
 import { CloseIcon, HistoryIcon, MenuIcon, MoonIcon, PinIcon, SaveIcon, SettingsIcon, ShareIcon, SunIcon, UpdateIcon } from "./icons";
 import { ShareDialog } from "./ShareDialog";
@@ -37,6 +37,7 @@ interface Scene {
 }
 
 const AUTOSAVE_MS = 1500;
+const LOGO_LINK = "https://vblog.io";
 const isMobile = () => window.matchMedia("(max-width: 768px)").matches;
 const pathFromHash = () => decodeURIComponent(location.hash.replace(/^#\/?/, "")) || null;
 
@@ -113,6 +114,8 @@ export default function App() {
   const [customizing, setCustomizing] = useState<false | "all" | "excalidraw">(false);
   const [historyFor, setHistoryFor] = useState<string | null>(null);
   const [shareFor, setShareFor] = useState<string | null>(null);
+  const [browseDir, setBrowseDir] = useState(""); // dossier affiché par l'explorateur
+  const [goto, setGoto] = useState<{ dir: string; view: View; seq: number }>();
 
   const excalidraw = useRef<ExcalidrawImperativeAPI | null>(null);
   const pathRef = useRef<string | null>(null); // schéma ouvert (survit aux renommages)
@@ -267,6 +270,29 @@ export default function App() {
   }, []);
 
   openRef.current = openFile;
+
+  /** Le schéma ouvert est-il entièrement enregistré ? */
+  const isSaved = () => {
+    const ex = excalidraw.current;
+    if (!ex) return true;
+    return sceneVersion(ex.getSceneElements(), ex.getAppState(), ex.getFiles()) === savedVersion.current;
+  };
+
+  /**
+   * Clic dans le chemin de la barre du haut : le dossier s'affiche en Galerie à la
+   * place du schéma, qui n'est fermé qu'une fois enregistré (sinon il reste dessous).
+   */
+  const browse = async (dir: string) => {
+    if (pathRef.current) {
+      await save();
+      if (isSaved()) closeFile();
+    }
+    setGoto((g) => ({ dir, view: "gallery", seq: (g?.seq ?? 0) + 1 }));
+    clearTimeout(peekTimer.current);
+    peek.current = "click";
+    setGallery(true);
+    setDrawerOpen(true);
+  };
 
   const onApi = useCallback((ex: ExcalidrawImperativeAPI | null) => {
     excalidraw.current = ex;
@@ -474,6 +500,11 @@ export default function App() {
 
   const appTitle = settings.title || DEFAULT_TITLE;
   const sceneName = scene ? stripExt(basename(scene.path)) : null;
+  // Chemin de la barre du haut : dossier et nom du schéma ouvert, sinon (ou Galerie
+  // affichée par-dessus) dossier de l'explorateur. Premier élément vide : la racine.
+  const sceneShown = !!scene && !(gallery && drawerOpen);
+  const shownDir = sceneShown && scene ? dirname(scene.path) : browseDir;
+  const pathParts = ["", ...(shownDir ? shownDir.split("/") : [])];
   useEffect(() => {
     document.title = sceneName ? `${sceneName} – ${appTitle}` : appTitle;
   }, [appTitle, sceneName]);
@@ -542,20 +573,40 @@ export default function App() {
         >
           <MenuIcon />
         </button>
-        <button className="brand" title="Paramètres" onClick={() => setCustomizing("all")}>
-          {settings.logo && <img className="logo" src={api.logoUrl(settings.logo)} alt="" />}
-          <span className="brand-title">{appTitle}</span>
-        </button>
-        {scene ? (
-          <span className="title" title={displayPath(scene.path)}>
-            <span className="sep muted" aria-hidden>
-              /
+        <a className="brand" href={LOGO_LINK} target="_blank" rel="noopener" title={LOGO_LINK.replace(/^https:\/\//, "")}>
+          {settings.logo ? (
+            <img className="logo" src={api.logoUrl(settings.logo)} alt={appTitle} />
+          ) : (
+            <span className="brand-title">{appTitle}</span>
+          )}
+        </a>
+        <nav className="path" aria-label="Emplacement">
+          {pathParts.map((part, i) => {
+            const p = pathParts.slice(1, i + 1).join("/");
+            return (
+              <span key={p} className="seg">
+                {i > 0 && (
+                  <span className="sep muted" aria-hidden>
+                    /
+                  </span>
+                )}
+                <button onClick={() => browse(p)} title={i ? `Afficher « ${label(part)} »` : "Afficher la racine"}>
+                  {i ? label(part) : "Racine"}
+                </button>
+              </span>
+            );
+          })}
+          {sceneShown && sceneName && (
+            <span className="seg current">
+              <span className="sep muted" aria-hidden>
+                /
+              </span>
+              <span className="scene-name" aria-current="page" title={sceneName}>
+                {sceneName}
+              </span>
             </span>
-            {sceneName}
-          </span>
-        ) : (
-          <span className="spacer" />
-        )}
+          )}
+        </nav>
         {scene && (
           <>
             <span className={`status ${saveState}`}>{SAVE_LABEL[saveState]}</span>
@@ -635,6 +686,8 @@ export default function App() {
           onHistory={showHistory}
           onShare={setShareFor}
           onViewChange={onViewChange}
+          onDirChange={setBrowseDir}
+          goto={goto}
           toolbarEnd={
             <button
               className={`icon-btn pin-btn ${pinned ? "on" : ""}`}

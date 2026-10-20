@@ -96,6 +96,10 @@ interface Props {
   toolbarEnd?: ReactNode;
   /** Changement de vue : la Galerie occupe toute la zone de travail (App). */
   onViewChange?: (view: View) => void;
+  /** Dossier affiché, signalé au parent (chemin de la barre du haut). */
+  onDirChange?: (dir: string) => void;
+  /** Navigation demandée par le parent (chemin de la barre du haut) ; seq change à chaque demande. */
+  goto?: { dir: string; view?: View; seq: number };
 }
 
 /** Vignettes, liste, ou Galerie (grandes tuiles avec métadonnées, pleine largeur). */
@@ -144,6 +148,8 @@ export function Explorer({
   onShare,
   toolbarEnd,
   onViewChange,
+  onDirChange,
+  goto,
 }: Props) {
   const [dir, setDir] = useState(() => (current ? dirname(current) : ""));
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -223,6 +229,18 @@ export function Explorer({
     setSelected(new Set());
     setAnchor(null);
   }, [dir, results === null]);
+
+  // Navigation depuis la barre du haut : recherche et filtre de tag annulés.
+  useEffect(() => {
+    if (!goto) return;
+    setQuery("");
+    setTagFilter(null);
+    setDir(goto.dir);
+    if (goto.view) setView(goto.view);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goto?.seq]);
+
+  useEffect(() => onDirChange?.(dir), [dir, onDirChange]);
 
   // Suit le dossier du schéma ouvert (lien direct, création, déplacement).
   useEffect(() => {
@@ -602,7 +620,7 @@ export function Explorer({
     },
   };
 
-  const big = view === "grid" ? 40 : gallery ? 28 : 20;
+  const big = view === "grid" ? 40 : gallery ? (trashView ? 28 : 56) : 20;
   const icon = (e: Entry) =>
     e.special ? (
       <span className={`icon special ${e.special} ${e.count ? "full" : ""}`} aria-hidden>
@@ -977,6 +995,43 @@ export function Explorer({
     );
   };
 
+  /** Galerie : tuile d'un dossier, de la taille d'une tuile de schéma. */
+  const dirTile = (e: Hit) => (
+    <li key={e.path} className={`${itemClass(e)} tile dir-tile`}>
+      <div className="row" draggable={!e.special && !locked} onDragStart={(ev) => onDragStart(ev, e)} {...dropProps(e.path)}>
+        {checkbox(e)}
+        <button className="name" onClick={(ev) => onItemClick(ev, e)} title={displayPath(e.path)}>
+          {icon(e)}
+          <span className="label">
+            {e.name}
+            {e.special === "poubelle" && !!e.count && <small className="badge">{e.count}</small>}
+          </span>
+        </button>
+        {!e.special && <span className="tile-tools">{moreButton(e)}</span>}
+        <div className="tile-meta">
+          {results && <small className="muted where">{where(e.path)}</small>}
+          {dirSummary(e)}
+        </div>
+      </div>
+    </li>
+  );
+
+  const upTile = !results && dir && (
+    <li className={`item dir up tile dir-tile ${dropTarget === dirname(dir) ? "drop" : ""}`}>
+      <div className="row" {...dropProps(dirname(dir))}>
+        <button className="name" onClick={() => setDir(dirname(dir))} title="Dossier parent">
+          <span className="icon" aria-hidden>
+            <UpIcon size={big} />
+          </span>
+          <span className="label">..</span>
+        </button>
+        <div className="tile-meta">
+          <small className="muted">{where(dir)}</small>
+        </div>
+      </div>
+    </li>
+  );
+
   const upItem = !results && dir && (
     <li className={`item dir up ${dropTarget === dirname(dir) ? "drop" : ""}`}>
       <div className="row" {...dropProps(dirname(dir))}>
@@ -998,9 +1053,9 @@ export function Explorer({
         ? "La poubelle est vide"
         : "Dossier vide";
 
-  // Galerie : dossiers en cartes compactes, schémas en grandes tuiles.
-  const galleryDirs = shown.filter((e) => e.isDir || trashView);
-  const galleryFiles = trashView ? [] : shown.filter((e) => !e.isDir);
+  // Galerie : dossiers et schémas en tuiles de même taille ; poubelle en cartes compactes.
+  const galleryDirs = shown.filter((e) => e.isDir);
+  const galleryFiles = shown.filter((e) => !e.isDir);
   const inspected = gallery && inspect ? (shown.find((e) => e.path === inspect && !e.isDir) ?? null) : null;
 
   return (
@@ -1125,6 +1180,8 @@ export function Explorer({
       <div className="listbar">
         {results ? (
           <span className="muted count">{plural(results.length, "résultat")}</span>
+        ) : gallery ? (
+          <span className="spacer" /> // chemin affiché dans la barre du haut
         ) : (
           <nav className="crumbs">
             <button className={dropTarget === "" ? "drop" : ""} onClick={() => setDir("")} {...dropProps("")}>
@@ -1243,20 +1300,19 @@ export function Explorer({
       {gallery ? (
         <div className="gallery-body">
           <div className={`gallery-scroll ${selected.size > 0 ? "selecting" : ""}`}>
-            {(upItem || galleryDirs.length > 0) && (
-              <>
-                {galleryFiles.length > 0 && !trashView && <h4 className="gallery-heading">Dossiers</h4>}
-                <ul className="entries gallery-dirs">
-                  {upItem}
-                  {galleryDirs.map(item)}
+            {trashView ? (
+              <ul className="entries gallery-dirs">
+                {upItem}
+                {shown.map(item)}
+              </ul>
+            ) : (
+              (upTile || shown.length > 0) && (
+                <ul className="entries gallery-tiles">
+                  {upTile}
+                  {galleryDirs.map(dirTile)}
+                  {galleryFiles.map(tile)}
                 </ul>
-              </>
-            )}
-            {galleryFiles.length > 0 && (
-              <>
-                {(upItem || galleryDirs.length > 0) && <h4 className="gallery-heading">Schémas</h4>}
-                <ul className="entries gallery-tiles">{galleryFiles.map(tile)}</ul>
-              </>
+              )
             )}
             {list.length === 0 && <p className="muted empty">{emptyText}</p>}
           </div>
