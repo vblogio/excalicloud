@@ -81,6 +81,8 @@ interface Props {
   onShare: (path: string) => void;
   /** Contenu ajouté au bout de la barre de recherche (bouton d'épinglage du panneau). */
   toolbarEnd?: ReactNode;
+  /** Incrémenté par le parent pour revenir à la racine (clic sur le logo). */
+  homeKey?: number;
 }
 
 type View = "list" | "grid";
@@ -107,7 +109,7 @@ const initialView = (): View => {
 const canMoveInto = (path: string, targetDir: string) =>
   dirname(path) !== targetDir && targetDir !== path && !targetDir.startsWith(path + "/");
 
-export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHistory, onShare, toolbarEnd }: Props) {
+export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHistory, onShare, toolbarEnd, homeKey }: Props) {
   const [dir, setDir] = useState(() => (current ? dirname(current) : ""));
   const [entries, setEntries] = useState<Entry[]>([]);
   const [query, setQuery] = useState("");
@@ -181,6 +183,14 @@ export function Explorer({ current, refreshKey, onOpen, onMoved, onDeleted, onHi
     setSelected(new Set());
     setAnchor(null);
   }, [dir, results === null]);
+
+  // Retour à la racine demandé par le parent : recherche et filtre de tag annulés.
+  useEffect(() => {
+    if (!homeKey) return;
+    setQuery("");
+    setTagFilter(null);
+    setDir("");
+  }, [homeKey]);
 
   // Suit le dossier du schéma ouvert (lien direct, création, déplacement).
   useEffect(() => {
