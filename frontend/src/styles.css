@@ -1678,11 +1678,12 @@ button.chip.on,
 }
 
 /* Poubelle : icône pleine ou vide, nombre d'éléments, barre « Vider ». */
+/* Orange voisin de l'ambre des Favoris, mais distinct ; plus clair en sombre. */
 .icon.special.poubelle {
-  color: var(--muted);
+  color: #f76707;
 }
-.icon.special.poubelle.full {
-  color: var(--accent);
+:root[data-theme="dark"] .icon.special.poubelle {
+  color: #ff922b;
 }
 .row .label .badge {
   display: inline-block;
