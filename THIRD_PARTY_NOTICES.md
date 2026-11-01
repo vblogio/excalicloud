@@ -39,9 +39,40 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### Papicons
+
+Most interface icons (`frontend/src/papicons.ts`, used by `frontend/src/icons.tsx` and `frontend/src/folderIcons.tsx`) are taken from [Papicons](https://github.com/PapillonApp/papicons), icons designed by Tom Things for Papillon (npm package `@getpapillon/papicons` 0.2.3, SVG paths copied unmodified).
+
+- Source: <https://github.com/PapillonApp/papicons>
+- License: MIT
+
+```text
+MIT License
+
+Copyright (c) 2025 Association Papillon
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### Tabler Icons
 
-The icons in `frontend/src/icons.tsx` are taken from [Tabler Icons](https://tabler.io/icons).
+The line icons without a Papicons equivalent (some folder icons in `frontend/src/folderIcons.tsx`, a few actions in `frontend/src/icons.tsx`) are based on [Tabler Icons](https://tabler.io/icons).
 
 - Source: <https://github.com/tabler/tabler-icons>
 - License: MIT
@@ -124,7 +155,8 @@ Ce projet (Excalicloud) est un projet indépendant. Il **n'est ni affilié à Ex
 Le code propre au projet est publié sous licence MIT (voir [`LICENSE`](LICENSE), traduction informative dans [`LICENSE.fr.md`](LICENSE.fr.md)). L'image Docker et le binaire Go redistribuent aussi les composants tiers suivants, chacun sous sa propre licence. Les textes de licence reproduits dans la section anglaise ci-dessus sont ceux qui font foi.
 
 - **Excalidraw** (`@excalidraw/excalidraw`) : licence MIT, Copyright (c) 2020 Excalidraw, <https://github.com/excalidraw/excalidraw>.
-- **Tabler Icons** (icônes de `frontend/src/icons.tsx`) : licence MIT, Copyright (c) 2020-2026 Paweł Kuna, <https://github.com/tabler/tabler-icons>.
+- **Papicons** (icônes de l'interface, `frontend/src/papicons.ts`) : licence MIT, Copyright (c) 2025 Association Papillon, <https://github.com/PapillonApp/papicons>.
+- **Tabler Icons** (icônes au trait sans équivalent Papicons, `frontend/src/folderIcons.tsx` et quelques actions de `frontend/src/icons.tsx`) : licence MIT, Copyright (c) 2020-2026 Paweł Kuna, <https://github.com/tabler/tabler-icons>.
 - **Polices** fournies par le paquet Excalidraw, copiées au build (`frontend/scripts/copy-fonts.mjs`) et servies localement : Excalifont, Virgil, Cascadia Code, Assistant, Nunito, Lilita One, Liberation Sans et Xiaolai sous SIL Open Font License 1.1 ; Comic Shanns sous MIT. Elles sont redistribuées sans modification, avec le logiciel, comme leurs licences le permettent ; elles ne peuvent pas être vendues seules. Sources dans le tableau de la section anglaise.
 - **Autres dépendances npm embarquées** : `react`, `react-dom` (MIT, Copyright (c) Meta Platforms, Inc. and affiliates) et les dépendances de `@excalidraw/excalidraw`, toutes sous licences permissives (MIT, ISC, Apache-2.0, BSD-3-Clause, 0BSD, Unlicense, CC0-1.0, Zlib ; option Apache-2.0 retenue pour `dompurify`). Liste détaillée dans la section anglaise ; le texte complet de chaque licence se trouve dans le répertoire du paquet sous `node_modules/`.
 - **Backend Go** : bibliothèque standard uniquement (licence BSD-3-Clause, <https://go.dev/LICENSE>). Image finale basée sur `gcr.io/distroless/static-debian12` (Apache-2.0) ; les paquets Debian qu'elle contient conservent leurs licences, consultables dans l'image sous `/usr/share/doc`.

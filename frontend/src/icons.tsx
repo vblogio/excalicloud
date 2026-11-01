@@ -1,8 +1,57 @@
-// Icônes au trait, dans le style d'Excalidraw (jeu Tabler, trait fin, couleur héritée).
-import type { ReactNode } from "react";
+// Icônes de l'interface : jeu Papicons (formes pleines, couleur héritée via currentColor).
+// Les tracés Papicons sont dans papicons.ts ; les quelques icônes absentes du jeu sont
+// dessinées ici dans le même esprit (formes pleines arrondies, ou trait épais à bouts ronds).
+import { useId, type ReactNode } from "react";
+import * as P from "./papicons";
+import type { PapPath } from "./papicons";
 
-export const icon = (paths: ReactNode) =>
-  function Icon({ size = 16 }: { size?: number }) {
+type IconProps = { size?: number };
+
+/** Identifiant de masque SVG unique et sûr dans url(#…). */
+function useMaskId() {
+  return "m" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
+}
+
+function Svg({ size = 16, children }: { size?: number; children: ReactNode }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      {children}
+    </svg>
+  );
+}
+
+const paths = (p: PapPath[]) =>
+  p.map((x, i) => <path key={i} d={x.d} fillRule={x.evenodd ? "evenodd" : undefined} clipRule={x.evenodd ? "evenodd" : undefined} />);
+
+/** Icône Papicons telle quelle. */
+export const pap = (p: PapPath[], transform?: string) =>
+  function Icon({ size }: IconProps) {
+    return (
+      <Svg size={size}>
+        <g transform={transform}>{paths(p)}</g>
+      </Svg>
+    );
+  };
+
+/** Icône au trait, pour les icônes de dossiers sans équivalent Papicons (trait 2, plus appuyé que Tabler). */
+export const icon = (children: ReactNode) =>
+  function Icon({ size = 16 }: IconProps) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {children}
+      </svg>
+    );
+  };
+
+/** Icône pleine dessinée ici. */
+const solid = (children: ReactNode) =>
+  function Icon({ size }: IconProps) {
+    return <Svg size={size}>{children}</Svg>;
+  };
+
+/** Icône au trait épais (graisse des flèches Papicons), pour les symboles absents du jeu. */
+const line = (children: ReactNode) =>
+  function Icon({ size = 16 }: IconProps) {
     return (
       <svg
         width={size}
@@ -10,288 +59,206 @@ export const icon = (paths: ReactNode) =>
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth={1.5}
+        strokeWidth={2.5}
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden
       >
-        {paths}
+        {children}
       </svg>
     );
   };
 
-export const SunIcon = icon(
+/** Icône Papicons avec une pastille en bas à droite (le fond est évidé autour de la pastille). */
+const badged = (base: PapPath[], badge: PapPath[]) =>
+  function Icon({ size }: IconProps) {
+    const id = useMaskId();
+    return (
+      <Svg size={size}>
+        <mask id={id}>
+          <rect width="24" height="24" fill="#fff" />
+          <circle cx="18" cy="18" r="7" fill="#000" />
+        </mask>
+        <g mask={`url(#${id})`}>{paths(base)}</g>
+        <g transform="translate(18 18) scale(0.5) translate(-12 -12)">{paths(badge)}</g>
+      </Svg>
+    );
+  };
+
+// Thème, barre du haut, panneaux.
+/** Soleil dessiné ici : celui de Papicons ressemble trop à la roue dentée des Paramètres. */
+export const SunIcon = solid(
   <>
-    <circle cx="12" cy="12" r="4" />
-    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    <circle cx="12" cy="12" r="4.5" />
+    <path
+      d="M12 2.5v1.5M12 20v1.5M2.5 12H4M20 12h1.5M5.3 5.3l1.05 1.05M17.65 17.65l1.05 1.05M5.3 18.7l1.05-1.05M17.65 6.35l1.05-1.05"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      strokeLinecap="round"
+    />
   </>,
 );
+export const MoonIcon = pap(P.Moon);
+export const SettingsIcon = pap(P.Gears);
+export const MenuIcon = pap(P.Menu);
+export const CloseIcon = pap(P.Cross);
+export const UpdateIcon = pap(P.Sparkles);
+export const UserIcon = pap(P.User);
+export const LogoutIcon = pap(P.Logout);
+export const InfoIcon = pap(P.Info);
+export const LinkIcon = pap(P.Link);
+export const SearchIcon = pap(P.Search);
 
-export const MoonIcon = icon(<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z" />);
+// Fichiers et dossiers.
+export const FolderIcon = pap(P.Folder);
+export const FileIcon = pap(P.Paper);
+export const FilePlusIcon = badged(P.Paper, P.Add);
+export const FolderPlusIcon = badged(P.Folder, P.Add);
+export const FolderUploadIcon = badged(P.Folder, P.ArrowUpBox);
+export const MoveIcon = badged(P.Folder, P.ArrowRightBox);
+export const UploadIcon = pap(P.ArrowUpBox);
+export const DownloadIcon = pap(P.ArrowDownBox);
+/** Dossier parent (« .. »). */
+export const UpIcon = pap(P.ArrowLeftUp);
+export const EditIcon = pap(P.PenAlt);
+export const SelectAllIcon = pap(P.Tasks);
+export const DeselectIcon = pap(P.Placeholder);
+/** Menu d'actions « … » : points à l'horizontale. */
+export const DotsIcon = pap(P.Dots, "rotate(90 12 12)");
 
-export const SettingsIcon = icon(
-  <>
-    <path d="M10.33 4.32c.43-1.76 2.93-1.76 3.35 0a1.72 1.72 0 0 0 2.57 1.07c1.54-.94 3.31.83 2.37 2.37a1.72 1.72 0 0 0 1.07 2.57c1.76.43 1.76 2.93 0 3.35a1.72 1.72 0 0 0-1.07 2.57c.94 1.54-.83 3.31-2.37 2.37a1.72 1.72 0 0 0-2.57 1.07c-.43 1.76-2.93 1.76-3.35 0a1.72 1.72 0 0 0-2.57-1.07c-1.54.94-3.31-.83-2.37-2.37a1.72 1.72 0 0 0-1.07-2.57c-1.76-.43-1.76-2.93 0-3.35a1.72 1.72 0 0 0 1.07-2.57c-.94-1.54.83-3.31 2.37-2.37 1 .61 2.3.07 2.57-1.07z" />
-    <circle cx="12" cy="12" r="3" />
-  </>,
-);
+// Vues de l'explorateur.
+export const ListIcon = pap(P.List);
+export const GridIcon = pap(P.Grid);
+export const GalleryIcon = pap(P.Gallery);
 
-export const MenuIcon = icon(<path d="M4 6h16M4 12h16M4 18h16" />);
-
-export const CloseIcon = icon(<path d="M18 6 6 18M6 6l12 12" />);
-
-export const FilePlusIcon = icon(
-  <>
-    <path d="M14 3v4a1 1 0 0 0 1 1h4" />
-    <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z" />
-    <path d="M12 11v6M9 14h6" />
-  </>,
-);
-
-export const FolderPlusIcon = icon(
-  <>
-    <path d="M12 19H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4l3 3h7a2 2 0 0 1 2 2v3.5" />
-    <path d="M16 19h6M19 16v6" />
-  </>,
-);
-
-export const UploadIcon = icon(
-  <>
-    <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-    <path d="M7 9l5-5 5 5M12 4v12" />
-  </>,
-);
-
-export const FolderUploadIcon = icon(
-  <>
-    <path d="M12 19H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4l3 3h7a2 2 0 0 1 2 2v3" />
-    <path d="M19 22v-6M22 19l-3-3-3 3" />
-  </>,
-);
-
-export const FolderIcon = icon(
-  <path d="M5 4h4l3 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2" />,
-);
-
-export const UpIcon = icon(<path d="M18 18h-6a3 3 0 0 1-3-3V5M13 10 9 6 5 10" />);
-
-export const SearchIcon = icon(
-  <>
-    <circle cx="10" cy="10" r="7" />
-    <path d="m21 21-6-6" />
-  </>,
-);
-
-export const ListIcon = icon(<path d="M9 6h11M9 12h11M9 18h11M5 6v.01M5 12v.01M5 18v.01" />);
-
-export const GridIcon = icon(
-  <>
-    <rect x="4" y="4" width="6" height="6" rx="1" />
-    <rect x="14" y="4" width="6" height="6" rx="1" />
-    <rect x="4" y="14" width="6" height="6" rx="1" />
-    <rect x="14" y="14" width="6" height="6" rx="1" />
-  </>,
-);
-
-export const RefreshIcon = icon(
-  <>
-    <path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4" />
-    <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
-  </>,
-);
-
-export const DotsIcon = icon(
-  <>
-    <circle cx="5" cy="12" r="1" />
-    <circle cx="12" cy="12" r="1" />
-    <circle cx="19" cy="12" r="1" />
-  </>,
-);
-
-export const TrashIcon = icon(
-  <path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" />,
-);
-
-/** Poubelle qui contient des éléments : une feuille et une boule de papier dépassent du bord. */
-export const TrashFullIcon = icon(
-  <>
-    <path d="M4 10h16M5 10l1 9a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-9M10 14v3M14 14v3" />
-    <path d="M7.5 10 9 3.5l4.5 1-1.2 5.5M10.2 6.5l2 .5" />
-    <circle cx="16" cy="7.8" r="2.2" />
-  </>,
-);
-
-export const RestoreIcon = icon(<path d="M9 14l-4-4 4-4M5 10h11a4 4 0 1 1 0 8h-1" />);
-
-export const FileIcon = icon(
-  <>
-    <path d="M14 3v4a1 1 0 0 0 1 1h4" />
-    <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z" />
-  </>,
-);
-
-export const SelectAllIcon = icon(
-  <>
-    <rect x="4" y="4" width="16" height="16" rx="2" />
-    <path d="m9 12 2 2 4-4" />
-  </>,
-);
-
-export const DeselectIcon = icon(<rect x="4" y="4" width="16" height="16" rx="2" />);
-
-export const MoveIcon = icon(
-  <>
-    <path d="M12 19H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4l3 3h7a2 2 0 0 1 2 2v3" />
-    <path d="M16 19h6M19 16l3 3-3 3" />
-  </>,
-);
-
-export const SaveIcon = icon(
-  <>
-    <path d="M6 4h10l4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2" />
-    <circle cx="12" cy="14" r="2" />
-    <path d="M14 4v4H8V4" />
-  </>,
-);
-
-export const UpdateIcon = icon(
-  <>
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 16V8M8.5 11.5 12 8l3.5 3.5" />
-  </>,
-);
-
-export const CopyIcon = icon(
-  <>
-    <rect x="8" y="8" width="12" height="12" rx="2" />
-    <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
-  </>,
-);
-
-export const EditIcon = icon(<path d="M4 20h4L18.5 9.5a2.83 2.83 0 0 0-4-4L4 16v4M13.5 6.5l4 4" />);
-
-export const HistoryIcon = icon(
-  <>
-    <path d="M12 8v4l2 2" />
-    <path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5" />
-  </>,
-);
-
-export const DownloadIcon = icon(
-  <>
-    <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-    <path d="M7 11l5 5 5-5M12 4v12" />
-  </>,
-);
-
-export const StarIcon = icon(
-  <path d="M12 17.75l-6.17 3.24 1.18-6.87-5-4.86 6.9-1 3.09-6.26 3.09 6.26 6.9 1-5 4.86 1.18 6.87z" />,
-);
-
-/** Étoile pleine (favori). */
-export function StarFilledIcon({ size = 16 }: { size?: number }) {
+// Poubelle.
+export const TrashIcon = pap(P.Trash);
+/** Poubelle qui contient des éléments : pastille pleine sur le couvercle. */
+export function TrashFullIcon({ size }: IconProps) {
+  const id = useMaskId();
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" aria-hidden>
-      <path d="M12 17.75l-6.17 3.24 1.18-6.87-5-4.86 6.9-1 3.09-6.26 3.09 6.26 6.9 1-5 4.86 1.18 6.87z" />
-    </svg>
+    <Svg size={size}>
+      <mask id={id}>
+        <rect width="24" height="24" fill="#fff" />
+        <circle cx="19.5" cy="4.5" r="4.5" fill="#000" />
+      </mask>
+      <g mask={`url(#${id})`}>{paths(P.Trash)}</g>
+      <circle cx="19.5" cy="4.5" r="3" />
+    </Svg>
   );
 }
 
-export const TagIcon = icon(
+// Favoris : étoile pleine (favori) ou évidée (pas favori), même silhouette.
+export const StarFilledIcon = pap(P.Star);
+export function StarIcon({ size }: IconProps) {
+  const id = useMaskId();
+  return (
+    <Svg size={size}>
+      <mask id={id}>
+        <rect width="24" height="24" fill="#fff" />
+        <g fill="#000" transform="translate(12 13) scale(0.45) translate(-12 -13)">
+          {paths(P.Star)}
+        </g>
+      </mask>
+      <g mask={`url(#${id})`}>{paths(P.Star)}</g>
+    </Svg>
+  );
+}
+
+// Actions sans équivalent dans Papicons.
+export const RefreshIcon = line(
   <>
-    <circle cx="8.5" cy="8.5" r="1" />
-    <path d="M4 7v3.86a2 2 0 0 0 .59 1.41l7.71 7.71a2.4 2.4 0 0 0 3.4 0l4.27-4.27a2.4 2.4 0 0 0 0-3.4L12.26 4.59A2 2 0 0 0 10.85 4H7a3 3 0 0 0-3 3z" />
+    <path d="M19.5 10.5A7.8 7.8 0 0 0 5 8.5M4.5 4.5v4h4" />
+    <path d="M4.5 13.5A7.8 7.8 0 0 0 19 15.5m.5 4v-4h-4" />
   </>,
 );
 
-export const ShareIcon = icon(
+export const RestoreIcon = line(<path d="M9 14.5 4.5 10 9 5.5M4.5 10h11a4.5 4.5 0 1 1 0 9H14" />);
+
+export const HistoryIcon = line(
   <>
-    <circle cx="6" cy="12" r="3" />
-    <circle cx="18" cy="6" r="3" />
-    <circle cx="18" cy="18" r="3" />
-    <path d="M8.7 10.7l6.6-3.4M8.7 13.3l6.6 3.4" />
+    <path d="M12 8v4l2.5 2" />
+    <path d="M3.5 11a8.6 8.6 0 1 1 .6 4M3.5 20v-5h5" />
   </>,
 );
 
-export const EyeIcon = icon(
+export const SortIcon = line(<path d="M4 6h9M4 12h7M4 18h5M17.5 4.5v15M14.5 16.5l3 3 3-3" />);
+
+export const CopyIcon = function CopyIcon({ size }: IconProps) {
+  const id = useMaskId();
+  return (
+    <Svg size={size}>
+      <mask id={id}>
+        <rect width="24" height="24" fill="#fff" />
+        <rect x="7" y="7" width="16" height="16" rx="5" fill="#000" />
+      </mask>
+      <rect x="3" y="3" width="12.5" height="12.5" rx="3.5" mask={`url(#${id})`} />
+      <rect x="9" y="9" width="12" height="12" rx="3.5" />
+    </Svg>
+  );
+};
+
+export const SaveIcon = function SaveIcon({ size }: IconProps) {
+  const id = useMaskId();
+  return (
+    <Svg size={size}>
+      <mask id={id}>
+        <rect width="24" height="24" fill="#fff" />
+        <rect x="7.5" y="1" width="7.5" height="6.5" rx="1.5" fill="#000" />
+        <circle cx="12" cy="15" r="2.75" fill="#000" />
+      </mask>
+      <path mask={`url(#${id})`} d="M7 3h8.2c.8 0 1.56.32 2.12.88l2.8 2.8c.56.56.88 1.32.88 2.12V17a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z" />
+    </Svg>
+  );
+};
+
+export const TagIcon = solid(
+  <path
+    fillRule="evenodd"
+    clipRule="evenodd"
+    d="M3 6a3 3 0 0 1 3-3h4.76a3 3 0 0 1 2.12.88l7.9 7.9a3 3 0 0 1 0 4.24l-4.76 4.76a3 3 0 0 1-4.24 0l-7.9-7.9A3 3 0 0 1 3 10.76zm5 .25a1.75 1.75 0 1 0 0 3.5 1.75 1.75 0 0 0 0-3.5z"
+  />,
+);
+
+export const ShareIcon = solid(
   <>
-    <circle cx="12" cy="12" r="2" />
-    <path d="M22 12c-2.67 4.67-6 7-10 7s-7.33-2.33-10-7c2.67-4.67 6-7 10-7s7.33 2.33 10 7" />
+    <path d="M6 12 17.5 5.5M6 12l11.5 6.5" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" />
+    <circle cx="6" cy="12" r="3.25" />
+    <circle cx="17.5" cy="5.5" r="3.25" />
+    <circle cx="17.5" cy="18.5" r="3.25" />
   </>,
 );
 
-/** Punaise : panneau épinglé ou flottant (comme le bouton d'ancrage des panneaux d'Excalidraw). */
-export const PinIcon = icon(<path d="M15 4.5l-4 4-4 1.5-1.5 1.5 7 7 1.5-1.5 1.5-4 4-4M9 15l-4.5 4.5M14.5 4 20 9.5" />);
+export const EyeIcon = solid(
+  <path
+    fillRule="evenodd"
+    clipRule="evenodd"
+    d="M12 5c4.3 0 7.6 2.7 9.5 6.1.3.56.3 1.24 0 1.8C19.6 16.3 16.3 19 12 19s-7.6-2.7-9.5-6.1a1.9 1.9 0 0 1 0-1.8C4.4 7.7 7.7 5 12 5m0 3.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7m0 2a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3"
+  />,
+);
 
-/** Espace personnel de l'utilisateur. */
-export const UserIcon = icon(
+/** Punaise : panneau épinglé ou flottant. */
+export const PinIcon = solid(
+  <g transform="rotate(35 12 12)">
+    <path d="M8.5 3h7a1.5 1.5 0 0 1 0 3H15v4l2.6 2.4c.95.88.33 2.6-1 2.6H7.4c-1.33 0-1.95-1.72-1-2.6L9 10V6h-.5a1.5 1.5 0 0 1 0-3z" />
+    <path d="M12 15v6" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" />
+  </g>,
+);
+
+// Métadonnées des schémas (vue Galerie, panneau Détails).
+export const ClockIcon = pap(P.Clock);
+export const TextIcon = pap(P.Font);
+export const PhotoIcon = pap(P.Camera);
+export const ArrowIcon = pap(P.ArrowRightUp);
+/** Taille du fichier. */
+export const SizeIcon = pap(P.Archive);
+
+export const ShapesIcon = solid(
   <>
-    <circle cx="12" cy="8" r="4" />
-    <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+    <rect x="3" y="3" width="8.5" height="8.5" rx="2.5" />
+    <circle cx="17" cy="17" r="4.25" />
+    <path d="M15.7 3.75a1.5 1.5 0 0 1 2.6 0l3.2 5.5A1.5 1.5 0 0 1 20.2 11.5h-6.4a1.5 1.5 0 0 1-1.3-2.25z" />
   </>,
 );
 
-export const LogoutIcon = icon(
-  <>
-    <path d="M14 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-2" />
-    <path d="M9 12h12l-3-3M18 15l3-3" />
-  </>,
-);
-
-// Vue Galerie et ses métadonnées.
-export const GalleryIcon = icon(
-  <>
-    <rect x="3" y="4" width="8" height="7" rx="1.5" />
-    <rect x="13" y="4" width="8" height="7" rx="1.5" />
-    <path d="M3 15h8M3 19h5M13 15h8M13 19h5" />
-  </>,
-);
-
-export const ClockIcon = icon(
-  <>
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7v5l3 3" />
-  </>,
-);
-
-export const ShapesIcon = icon(
-  <>
-    <rect x="3" y="3" width="8" height="8" rx="1" />
-    <circle cx="17" cy="17" r="4" />
-    <path d="M17 3l4 7h-8z" />
-  </>,
-);
-
-export const TextIcon = icon(<path d="M6 4h12M12 4v16M9 20h6" />);
-
-export const PhotoIcon = icon(
-  <>
-    <rect x="3" y="4" width="18" height="16" rx="2" />
-    <circle cx="9" cy="10" r="1.5" />
-    <path d="M21 16l-5-5-8 9" />
-  </>,
-);
-
-export const FrameIcon = icon(<path d="M4 7h16M4 17h16M7 4v16M17 4v16" />);
-
-export const ArrowIcon = icon(<path d="M5 19 19 5M10 5h9v9" />);
-
-export const SizeIcon = icon(
-  <>
-    <path d="M6 4h10l4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
-    <path d="M8 4v5h7V4M8 20v-6h8v6" />
-  </>,
-);
-
-export const SortIcon = icon(<path d="M4 6h9M4 12h7M4 18h5M17 4v16M14 17l3 3 3-3" />);
-
-export const InfoIcon = icon(
-  <>
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 8v.01M11 12h1v4h1" />
-  </>,
-);
-
-export const LinkIcon = icon(
-  <path d="M9 15l6-6M11 6l.46-.54a5 5 0 0 1 7.07 7.07l-.53.47M13 18l-.4.53a5 5 0 0 1-7.07-7.07L6 11" />,
-);
+export const FrameIcon = line(<path d="M4 7.5h16M4 16.5h16M7.5 4v16M16.5 4v16" />);

@@ -1,8 +1,11 @@
-// Icônes proposées pour les dossiers (jeu Tabler, comme icons.tsx). Le nom est
+// Icônes proposées pour les dossiers : Papicons quand le jeu a l'équivalent, sinon
+// tracé au trait (dessins Tabler). Le nom est
 // enregistré côté serveur (.meta.json) : ne pas renommer une clé existante.
-import { FolderIcon, icon } from "./icons";
+import type { ComponentType } from "react";
+import { FolderIcon, icon, pap } from "./icons";
+import * as P from "./papicons";
 
-type Icon = ReturnType<typeof icon>;
+type Icon = ComponentType<{ size?: number }>;
 
 export const FOLDER_ICONS: { name: string; label: string; Icon: Icon }[] = [
   {
@@ -106,12 +109,7 @@ export const FOLDER_ICONS: { name: string; label: string; Icon: Icon }[] = [
   {
     name: "world",
     label: "Internet",
-    Icon: icon(
-      <>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M3.6 9h16.8M3.6 15h16.8M11.5 3a17 17 0 0 0 0 18M12.5 3a17 17 0 0 1 0 18" />
-      </>,
-    ),
+    Icon: pap(P.Globe),
   },
   {
     name: "shield",
@@ -121,13 +119,7 @@ export const FOLDER_ICONS: { name: string; label: string; Icon: Icon }[] = [
   {
     name: "lock",
     label: "Confidentiel",
-    Icon: icon(
-      <>
-        <rect x="5" y="11" width="14" height="10" rx="2" />
-        <circle cx="12" cy="16" r="1" />
-        <path d="M8 11V7a4 4 0 1 1 8 0v4" />
-      </>,
-    ),
+    Icon: pap(P.Lock),
   },
   {
     name: "desktop",
@@ -142,7 +134,7 @@ export const FOLDER_ICONS: { name: string; label: string; Icon: Icon }[] = [
   {
     name: "code",
     label: "Code",
-    Icon: icon(<path d="M7 8l-4 4 4 4M17 8l4 4-4 4M14 4l-4 16" />),
+    Icon: pap(P.Code),
   },
   {
     name: "tool",
@@ -152,12 +144,7 @@ export const FOLDER_ICONS: { name: string; label: string; Icon: Icon }[] = [
   {
     name: "file-text",
     label: "Documents",
-    Icon: icon(
-      <>
-        <path d="M14 3v4a1 1 0 0 0 1 1h4" />
-        <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2zM9 9h1M9 13h6M9 17h6" />
-      </>,
-    ),
+    Icon: pap(P.Paper),
   },
   {
     name: "book",
@@ -172,21 +159,12 @@ export const FOLDER_ICONS: { name: string; label: string; Icon: Icon }[] = [
   {
     name: "chart",
     label: "Indicateurs",
-    Icon: icon(
-      <>
-        <rect x="3" y="12" width="6" height="8" rx="1" />
-        <rect x="9" y="8" width="6" height="12" rx="1" />
-        <rect x="15" y="4" width="6" height="16" rx="1" />
-        <path d="M4 20h14" />
-      </>,
-    ),
+    Icon: pap(P.Pie),
   },
   {
     name: "bulb",
     label: "Idées",
-    Icon: icon(
-      <path d="M3 12h1m8-9v1m8 8h1M5.6 5.6l.7.7m12.1-.7-.7.7M9 16a5 5 0 1 1 6 0 3.5 3.5 0 0 0-1 3 2 2 0 0 1-4 0 3.5 3.5 0 0 0-1-3M9.7 17h4.6" />,
-    ),
+    Icon: pap(P.Sparkles),
   },
   {
     name: "users",
@@ -208,22 +186,12 @@ export const FOLDER_ICONS: { name: string; label: string; Icon: Icon }[] = [
   {
     name: "calendar",
     label: "Planning",
-    Icon: icon(
-      <>
-        <rect x="4" y="5" width="16" height="16" rx="2" />
-        <path d="M16 3v4M8 3v4M4 11h16" />
-      </>,
-    ),
+    Icon: pap(P.Calendar),
   },
   {
     name: "photo",
     label: "Images",
-    Icon: icon(
-      <>
-        <rect x="3" y="3" width="18" height="18" rx="3" />
-        <path d="M15 8h.01M3 16l5-5c.93-.89 2.07-.89 3 0l5 5M14 14l1-1c.93-.89 2.07-.89 3 0l3 3" />
-      </>,
-    ),
+    Icon: pap(P.Gallery),
   },
   {
     name: "flag",
@@ -233,12 +201,7 @@ export const FOLDER_ICONS: { name: string; label: string; Icon: Icon }[] = [
   {
     name: "archive",
     label: "Archives",
-    Icon: icon(
-      <>
-        <rect x="3" y="4" width="18" height="4" rx="2" />
-        <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M10 12h4" />
-      </>,
-    ),
+    Icon: pap(P.Archive),
   },
 ];
 
