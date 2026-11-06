@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import {
   api,
@@ -64,7 +65,7 @@ import { DetailsPanel } from "./DetailsPanel";
 import { fmtDate, fmtRelative, fmtSize, plural, who } from "./format";
 import { FolderGlyph } from "./folderIcons";
 import { IconDialog } from "./IconDialog";
-import { collectDrop, collectFiles, hasFiles, type Collected } from "./importer";
+import { collectDrop, collectFiles, forCanvas, hasFiles, onlyImages, type Collected } from "./importer";
 import { MoveDialog } from "./MoveDialog";
 import { TagsDialog } from "./TagsDialog";
 import { Thumb } from "./Thumb";
@@ -103,6 +104,8 @@ interface Props {
   goto?: { dir: string; view?: View; seq: number };
   /** Tri par défaut (Paramètres) : appliqué à l'ouverture et à chaque changement du réglage. */
   defaultSort?: Sort;
+  /** Import lancé par un dépôt hors de l'explorateur : le parent l'affiche (progression, bilan). */
+  onExternalImport?: () => void;
 }
 
 /** Vignettes, liste, ou Galerie (grandes tuiles avec métadonnées, pleine largeur). */
@@ -150,6 +153,7 @@ export function Explorer({
   onDirChange,
   goto,
   defaultSort = "name",
+  onExternalImport,
 }: Props) {
   const [dir, setDir] = useState(() => (current ? dirname(current) : ""));
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -167,6 +171,7 @@ export function Explorer({
   const [notice, setNotice] = useState<{ text: string; detail?: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null); // progression d'un import
   const [fileDrag, setFileDrag] = useState(false); // fichiers du système survolant l'explorateur
+  const [windowDrag, setWindowDrag] = useState(false); // … survolant le reste de la fenêtre
   const [tags, setTags] = useState<TagCount[]>([]);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [tagging, setTagging] = useState<Entry[] | null>(null); // éléments du dialogue « Tags »
@@ -613,6 +618,63 @@ export function Explorer({
       importTree(collectDrop(ev.dataTransfer), importDir);
     },
   };
+
+  // Dépôt ailleurs dans la fenêtre (canevas, barre du haut, explorateur masqué) :
+  // import dans le dossier courant de l'explorateur. Écoute en phase de capture pour
+  // passer avant Excalidraw, qui garde les images et les .excalidrawlib déposés sur
+  // le canevas d'un schéma ouvert. L'explorateur lui-même a ses propres cibles.
+  const windowDrop = useRef({ importDir, current, run: (_dt: DataTransfer) => {} });
+  windowDrop.current = {
+    importDir,
+    current,
+    run: (dt) => {
+      onExternalImport?.();
+      importTree(collectDrop(dt), importDir);
+    },
+  };
+  useEffect(() => {
+    const inDrawer = (t: EventTarget | null) => t instanceof Element && !!t.closest(".drawer");
+    const onCanvas = (t: EventTarget | null) =>
+      !!windowDrop.current.current && t instanceof Element && !!t.closest(".canvas .excalidraw");
+    const over = (ev: globalThis.DragEvent) => {
+      const dt = ev.dataTransfer;
+      if (!dt || !hasFiles(dt)) return;
+      if (inDrawer(ev.target)) return setWindowDrag(false);
+      if (onCanvas(ev.target) && onlyImages(dt)) return setWindowDrag(false);
+      ev.preventDefault();
+      ev.stopPropagation();
+      // Dialogue ouvert : pas d'import, et le navigateur n'ouvre pas le fichier.
+      const modal = !!document.querySelector(".modal-backdrop");
+      dt.dropEffect = modal ? "none" : "copy";
+      setWindowDrag(!modal);
+    };
+    const leave = (ev: globalThis.DragEvent) => {
+      // Sortie de la fenêtre : pas d'élément d'arrivée (Safari n'en donne jamais, d'où les coordonnées).
+      if (ev.relatedTarget) return;
+      const { clientX: x, clientY: y } = ev;
+      if (x <= 0 || y <= 0 || x >= innerWidth || y >= innerHeight) setWindowDrag(false);
+    };
+    const drop = (ev: globalThis.DragEvent) => {
+      const dt = ev.dataTransfer;
+      if (!dt || !hasFiles(dt) || inDrawer(ev.target)) return;
+      setWindowDrag(false);
+      if (onCanvas(ev.target) && forCanvas(dt)) return; // Excalidraw s'en charge
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!document.querySelector(".modal-backdrop")) windowDrop.current.run(dt);
+    };
+    const end = () => setWindowDrag(false);
+    window.addEventListener("dragover", over, true);
+    window.addEventListener("dragleave", leave, true);
+    window.addEventListener("drop", drop, true);
+    window.addEventListener("dragend", end, true);
+    return () => {
+      window.removeEventListener("dragover", over, true);
+      window.removeEventListener("dragleave", leave, true);
+      window.removeEventListener("drop", drop, true);
+      window.removeEventListener("dragend", end, true);
+    };
+  }, []);
 
   const big = view === "grid" ? 40 : gallery ? (trashView ? 28 : 56) : 20;
   const icon = (e: Entry) =>
@@ -1337,6 +1399,19 @@ export function Explorer({
           {list.length === 0 && <li className="muted empty">{emptyText}</li>}
         </ul>
       )}
+
+      {windowDrag &&
+        createPortal(
+          <div className="drop-hint window" aria-hidden>
+            <FolderUploadIcon size={36} />
+            <span>Déposer pour importer dans « {importDir ? label(basename(importDir)) : "Racine"} »</span>
+            <small>
+              Les dossiers sont recréés · seuls les .excalidraw sont importés
+              {current ? " · les images déposées sur le schéma y sont insérées" : ""}
+            </small>
+          </div>,
+          document.body,
+        )}
 
       {fileDrag && (
         <div className="drop-hint" aria-hidden>

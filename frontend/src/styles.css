@@ -1065,6 +1065,13 @@ li.active > .row {
   color: var(--muted);
   font-weight: 400;
 }
+/* Fichiers glissés hors de l'explorateur : indication sur toute la fenêtre. */
+.drop-hint.window {
+  position: fixed;
+  inset: 12px;
+  z-index: 1000;
+  font-size: 1.1rem;
+}
 /* Survol d'un dossier précis : l'indication générale s'efface. */
 .explorer:has(.item.drop) .drop-hint,
 .explorer:has(.crumbs .drop) .drop-hint {

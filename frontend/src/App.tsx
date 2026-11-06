@@ -689,6 +689,12 @@ export default function App() {
           onDirChange={setBrowseDir}
           goto={goto}
           defaultSort={settings.sort}
+          onExternalImport={() => {
+            if (isMobile()) return;
+            clearTimeout(peekTimer.current);
+            peek.current = "click"; // reste ouvert pour suivre l'import
+            setDrawerOpen(true);
+          }}
           toolbarEnd={
             <button
               className={`icon-btn pin-btn ${pinned ? "on" : ""}`}

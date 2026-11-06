@@ -22,6 +22,27 @@ const hidden = (name: string) => name.startsWith(".");
 /** Le glisser contient-il des fichiers venant du système ? */
 export const hasFiles = (dt: DataTransfer) => dt.types.includes("Files");
 
+const isImage = (type: string, name = "") =>
+  type.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i.test(name);
+
+/**
+ * Glisser en cours uniquement composé d'images (types MIME connus pendant dragover
+ * sous Chrome et Firefox ; Safari les masque, le glisser est alors pris pour un import).
+ */
+export const onlyImages = (dt: DataTransfer) => {
+  const items = Array.from(dt.items);
+  return items.length > 0 && items.every((i) => i.kind === "file" && isImage(i.type));
+};
+
+/**
+ * Dépôt destiné au canevas d'Excalidraw (insertion d'images, ajout d'un .excalidrawlib
+ * à la bibliothèque) : les noms ne sont connus qu'au moment du drop.
+ */
+export const forCanvas = (dt: DataTransfer) => {
+  const files = Array.from(dt.files);
+  return files.length > 0 && files.every((f) => isImage(f.type, f.name) || /\.excalidrawlib$/i.test(f.name));
+};
+
 const readAll = (reader: FileSystemDirectoryReader) =>
   new Promise<FileSystemEntry[]>((resolve, reject) => {
     const out: FileSystemEntry[] = [];
