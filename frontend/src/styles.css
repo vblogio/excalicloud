@@ -47,25 +47,30 @@
 }
 
 :root[data-theme="dark"] {
-  --ex-island: #232329;
-  --ex-canvas: #121212;
-  --ex-surface-lowest: hsl(0 0% 7%);
-  --ex-surface-low: hsl(240 8% 15%);
-  --ex-surface-mid: hsl(240 6% 10%);
-  --ex-surface-high: hsl(245 10% 21%);
-  --ex-on-surface: #e3e3e8;
-  --ex-primary: #a8a5ff;
-  --ex-brand-hover: #bbb8ff;
-  --ex-brand-active: #d0ccff;
-  --ex-primary-container: #403e6a;
-  --ex-on-primary-container: #e0dfff;
-  --ex-outline: #8e8d9c;
-  --ex-outline-variant: #46464f;
-  --ex-gray-20: hsl(245 10% 21%);
-  --ex-muted: #999999;
-  --ex-danger: #ffa8a8;
-  --ex-danger-bg: #5a0000;
-  --ex-scrollbar: #343a40;
+  /* Palette sombre reprise d'Up And Down (frontend/src/styles.css) :
+     bg #0f1218, panel #171b24, panel-2 #1e2330, hover #222838, border #2a3042,
+     accent #6e9bff. Le canevas Excalidraw garde son propre thème. */
+  --ex-island: #171b24; /* panel */
+  --ex-canvas: #0f1218; /* bg */
+  --ex-surface-lowest: #171b24; /* tuiles, champs */
+  --ex-surface-low: #1e2330; /* panel-2 : boutons */
+  --ex-surface-mid: #1e2330; /* zone d'icône des tuiles */
+  --ex-surface-high: #222838; /* hover */
+  --ex-on-surface: #e6e9f2;
+  --ex-primary: #6e9bff;
+  --ex-brand-hover: #8cb0ff;
+  --ex-brand-active: #a9c4ff;
+  --ex-primary-container: #22325a; /* accent-soft */
+  --ex-on-primary-container: #6e9bff;
+  --ex-outline: #8e95aa;
+  --ex-outline-variant: #2a3042;
+  --ex-gray-20: #2a3042; /* border */
+  --ex-muted: #8e95aa;
+  --ex-danger: #ff8787;
+  --ex-danger-bg: #4a1d1d;
+  --ex-scrollbar: #2a3042;
+  --ex-shadow-island: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 14px rgb(0 0 0 / 0.3);
+  --ex-shadow-modal: 0 20px 50px rgb(0 0 0 / 0.6);
   --ok: #69db7c;
   --warn: #ffa94d;
   color-scheme: dark;
