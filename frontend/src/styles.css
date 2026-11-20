@@ -29,6 +29,8 @@
   --ex-btn: 2rem; /* --default-button-size */
   --ex-btn-lg: 2.25rem; /* --lg-button-size */
   --ex-font: Assistant, system-ui, BlinkMacSystemFont, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Police d'Up And Down, pour le titre et le chemin de la barre du haut. */
+  --ud-font: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
   /* Alias utilisés par le reste de la feuille. */
   --bg: var(--ex-canvas);
@@ -318,7 +320,7 @@ button.danger:hover:not(:disabled) {
   align-items: center;
   overflow: hidden;
   white-space: nowrap;
-  font-size: 14px;
+  font: 14px/1.45 var(--ud-font);
   margin-left: 0.6rem;
   padding-left: 0.6rem;
   border-left: 1px solid var(--border);
@@ -335,6 +337,7 @@ button.danger:hover:not(:disabled) {
 }
 .topbar .path .sep {
   padding: 0 2px;
+  color: var(--muted);
 }
 .topbar .path button,
 .topbar .path .scene-name {
@@ -343,19 +346,23 @@ button.danger:hover:not(:disabled) {
   text-overflow: ellipsis;
   height: auto;
   padding: 4px 6px;
-  border: none;
+  border: 1px solid transparent;
   box-shadow: none;
   background: transparent;
   font: inherit;
-  border-radius: var(--ex-radius-lg);
+  letter-spacing: normal;
+  color: var(--fg);
+  border-radius: 10px;
 }
 .topbar .path button:focus:not(:focus-visible) {
   background: transparent;
 }
 .topbar .path button:hover {
-  background: var(--ex-surface-mid, var(--ex-surface-low));
+  background: var(--ex-surface-high);
 }
-.topbar .path .scene-name {
+/* Élément courant en gras, comme dans Up And Down : le schéma ouvert, sinon le dossier affiché. */
+.topbar .path .scene-name,
+.topbar .path button.current {
   font-weight: 600;
 }
 
@@ -375,7 +382,7 @@ button.danger:hover:not(:disabled) {
   padding: 0;
   box-shadow: none;
   /* Même police, taille, graisse et interligne que dans Up And Down (.brand). */
-  font: 700 16px/1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font: 700 16px/1.45 var(--ud-font);
   letter-spacing: normal;
   border-radius: var(--ex-radius-lg);
 }

@@ -587,7 +587,12 @@ export default function App() {
                     /
                   </span>
                 )}
-                <button onClick={() => browse(p)} title={i ? `Afficher « ${label(part)} »` : "Afficher la racine"}>
+                <button
+                  className={!sceneShown && i === pathParts.length - 1 ? "current" : undefined}
+                  aria-current={!sceneShown && i === pathParts.length - 1 ? "page" : undefined}
+                  onClick={() => browse(p)}
+                  title={i ? `Afficher « ${label(part)} »` : "Afficher la racine"}
+                >
                   {i ? label(part) : "Racine"}
                 </button>
               </span>
