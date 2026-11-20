@@ -375,7 +375,9 @@ button.danger:hover:not(:disabled) {
   letter-spacing: normal;
   border-radius: var(--ex-radius-lg);
 }
+/* Titre : même police, taille et graisse que dans Up And Down (.brand). */
 .brand-title {
+  font: 700 16px/1.2 Inter, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
