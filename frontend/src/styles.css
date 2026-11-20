@@ -370,7 +370,7 @@ button.danger:hover:not(:disabled) {
   font-weight: 600;
 }
 
-/* Logo (lien vers le site) suivi du titre. */
+/* Logo suivi du titre : bouton « Accueil ». */
 .brand {
   text-decoration: none;
   color: inherit;

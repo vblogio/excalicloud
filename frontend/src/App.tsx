@@ -37,7 +37,6 @@ interface Scene {
 }
 
 const AUTOSAVE_MS = 1500;
-const LOGO_LINK = "https://vblog.io";
 const isMobile = () => window.matchMedia("(max-width: 768px)").matches;
 const pathFromHash = () => decodeURIComponent(location.hash.replace(/^#\/?/, "")) || null;
 
@@ -573,7 +572,15 @@ export default function App() {
         >
           <MenuIcon />
         </button>
-        <a className="brand" href={LOGO_LINK} target="_blank" rel="noopener" title={LOGO_LINK.replace(/^https:\/\//, "")}>
+        <a
+          className="brand"
+          href="#"
+          title="Accueil"
+          onClick={(e) => {
+            e.preventDefault();
+            browse("");
+          }}
+        >
           {settings.logo && <img className="logo" src={api.logoUrl(settings.logo)} alt="" />}
           <span className="brand-title">{appTitle}</span>
         </a>
