@@ -330,6 +330,10 @@ button.danger:hover:not(:disabled) {
   align-items: center;
   min-width: 2.5em;
   flex-shrink: 1;
+  /* Chemin (14 px) centré mais plus petit que le titre (16 px) : sa ligne de base
+     tombait 2 px plus haut. On l'abaisse pour aligner les deux lignes de base. */
+  position: relative;
+  top: 2px;
 }
 .topbar .path .seg:last-child {
   flex-shrink: 0;
