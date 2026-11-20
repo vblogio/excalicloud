@@ -574,11 +574,8 @@ export default function App() {
           <MenuIcon />
         </button>
         <a className="brand" href={LOGO_LINK} target="_blank" rel="noopener" title={LOGO_LINK.replace(/^https:\/\//, "")}>
-          {settings.logo ? (
-            <img className="logo" src={api.logoUrl(settings.logo)} alt={appTitle} />
-          ) : (
-            <span className="brand-title">{appTitle}</span>
-          )}
+          {settings.logo && <img className="logo" src={api.logoUrl(settings.logo)} alt="" />}
+          <span className="brand-title">{appTitle}</span>
         </a>
         <nav className="path" aria-label="Emplacement">
           {pathParts.map((part, i) => {

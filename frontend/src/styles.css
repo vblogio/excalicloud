@@ -356,7 +356,7 @@ button.danger:hover:not(:disabled) {
   font-weight: 600;
 }
 
-/* Logo (lien vers le site), ou titre à défaut de logo. */
+/* Logo (lien vers le site) suivi du titre. */
 .brand {
   text-decoration: none;
   color: inherit;
