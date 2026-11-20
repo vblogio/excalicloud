@@ -290,9 +290,9 @@ button.danger:hover:not(:disabled) {
   grid-column: 1 / -1;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 8px;
-  padding-left: max(8px, env(safe-area-inset-left));
+  gap: 0.4rem; /* marges et espacements d'Up And Down */
+  padding: 0 0.9rem;
+  padding-left: max(0.9rem, env(safe-area-inset-left));
   border-bottom: 1px solid var(--border);
   background: var(--panel);
   min-width: 0;
@@ -319,6 +319,9 @@ button.danger:hover:not(:disabled) {
   overflow: hidden;
   white-space: nowrap;
   font-size: 14px;
+  margin-left: 0.6rem;
+  padding-left: 0.6rem;
+  border-left: 1px solid var(--border);
 }
 .topbar .path .seg {
   display: flex;
@@ -362,22 +365,31 @@ button.danger:hover:not(:disabled) {
   color: inherit;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.55rem;
   min-width: 0;
   max-width: 40%;
   flex: none;
   border: none;
   background: transparent;
   height: auto;
-  padding: 2px 6px 2px 2px;
+  padding: 0;
   box-shadow: none;
-  font: 600 15px/1.2 var(--ex-font);
+  /* Même police, taille, graisse et interligne que dans Up And Down (.brand). */
+  font: 700 16px/1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   letter-spacing: normal;
   border-radius: var(--ex-radius-lg);
 }
-/* Titre : même police, taille et graisse que dans Up And Down (.brand). */
+/* Bouton de l'explorateur et logo : dimensions d'Up And Down (28 px, 32 px). */
+.topbar .menu-btn {
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+.brand .logo {
+  --logo-size: 32px;
+  box-shadow: none;
+}
 .brand-title {
-  font: 700 16px/1.2 Inter, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -561,7 +561,7 @@ export default function App() {
     >
       <header className="topbar">
         <button
-          className={`ex-btn square ${drawerOpen ? "active" : ""}`}
+          className={`ex-btn square menu-btn ${drawerOpen ? "active" : ""}`}
           aria-label="Afficher/masquer l'explorateur"
           aria-pressed={drawerOpen}
           title="Explorateur"
